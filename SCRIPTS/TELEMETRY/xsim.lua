@@ -10,9 +10,9 @@ local telemFid = nil
 local telemTic = nil
 
 local function telemOpen(fn)
-  telemFid = fn and fio.open(fn, "r")
+  telemFid = fn and simIO.open(fn, "r")
   if telemFid then
-    local c = fio.read(telemFid, 1)
+    local c = simIO.read(telemFid, 1)
     if c ~= "#" then
       return nil
     end
@@ -21,9 +21,9 @@ local function telemOpen(fn)
     local idx = 1
     local buf = ""
     while true do
-      c = fio.read(telemFid, 1)
+      c = simIO.read(telemFid, 1)
       if not c or c == "" then
-        fio.close(telemFid)
+        simIO.close(telemFid)
         telemFid = nil
         break
       elseif c == ";" then
@@ -76,9 +76,9 @@ local function telemUpdate(now)
       local idx = 1
       local buf = ""
       while true do
-        local c = fio.read(telemFid, 1)
+        local c = simIO.read(telemFid, 1)
         if c == nil or c == "" then
-          fio.close(telemFid)
+          simIO.close(telemFid)
           telemFid = nil
           break
         elseif c == ";" then
@@ -127,7 +127,7 @@ end
 
 local function telemClose()
   if telemFid then
-    fio.close(telemFid)
+    simIO.close(telemFid)
     telemFid = nil
   end
   return true
@@ -159,8 +159,8 @@ function simGetValue(source)
 end
 
 local function init(...)
-  if not fio then
-    fio = io
+  if not simIO then
+    simIO = io
   end
   local func, emsg = loadScript(xPilotFile)
   if func then

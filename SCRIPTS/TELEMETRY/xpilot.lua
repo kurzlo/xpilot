@@ -1,201 +1,133 @@
-local xEnv = {}
-xEnv.sim = false
-xEnv.dir = {
-  --[[ ["mod"] = "/MODELS/xpilot/", ]]
-  ["scr"] = "/SCRIPTS/TELEMETRY/xpilot/",
-  ["cfg"] = "/SCRIPTS/TELEMETRY/xpilot/",
-  ["wav"] = "/SOUNDS/xpilot/en/",
-  --[[ ["img"] = "/SCRIPTS/BMP/", ]]
-  ["log"] = "/LOGS/",
-}
-xEnv.file = {
-  ["scr"] = { "lib", --[["msg",]] "cfg", "telem", "alert", "menu", "main" },
-  ["cfg"] = "xpilot",
-}
-xEnv.scr = {
-  ["ext"] = { ".luac", ".lua" },
-}
 
-local xio = {
-  ["open" ] = io.open,
-  ["close"] = io.close,
-  ["read" ] = io.read,
-  ["write"] = io.write,
-}
-
-xPilot = {}
-xPilot.evt = {
-  ["shft"] = { ["prs"] =  96, ["rel"] = 32, ["lng"] = 128 },
-  ["exit"] = { ["prs"] =  97, ["rel"] = 33, ["lng"] = 129 },
-  ["entr"] = { ["prs"] =  98, ["rel"] = 34, ["lng"] = 130 },
-  ["dn"  ] = { ["prs"] =  99, ["rel"] = 35, ["lng"] =  67 },
-  ["up"  ] = { ["prs"] = 100, ["rel"] = 36, ["lng"] =  68 },
-  ["rght"] = { ["prs"] = 101, ["rel"] = 37, ["lng"] =  69 },
-  ["left"] = { ["prs"] = 102, ["rel"] = 38, ["lng"] =  70 },
-}
-xPilot.evt.handle = true
-xPilot.ui = {
-  ["font"] = {
-    ["sml"] = { ["h"] =  7 },
-    ["nml"] = { ["h"] =  7 },
-    ["mid"] = { ["h"] = 11 },
-    ["dbl"] = { ["h"] = 15 },
+local xpilot = {
+  ["env"] = {
+    ["sim"] = false,
+    ["dir"] = {
+      --[[ ["mod"] = "/MODELS/xpilot/", ]]
+      ["scr"] = "/SCRIPTS/TELEMETRY/xpilot/",
+      ["cfg"] = "/SCRIPTS/TELEMETRY/xpilot/",
+      ["wav"] = "/SOUNDS/xpilot/en/",
+      --[[ ["img"] = "/SCRIPTS/BMP/", ]]
+      ["log"] = "/LOGS/",
+    },
+    ["cfg"] = {
+      ["file"] = "xpilot",
+    },
+    ["evt"] = {
+      ["shft"] = { ["prs"] =  96, ["rel"] = 32, ["lng"] = 128 },
+      ["exit"] = { ["prs"] =  97, ["rel"] = 33, ["lng"] = 129 },
+      ["entr"] = { ["prs"] =  98, ["rel"] = 34, ["lng"] = 130 },
+      ["dn"  ] = { ["prs"] =  99, ["rel"] = 35, ["lng"] =  67 },
+      ["up"  ] = { ["prs"] = 100, ["rel"] = 36, ["lng"] =  68 },
+      ["rght"] = { ["prs"] = 101, ["rel"] = 37, ["lng"] =  69 },
+      ["left"] = { ["prs"] = 102, ["rel"] = 38, ["lng"] =  70 },
+    },
+    ["font"] = {
+      ["sml"] = { ["h"] =  7 },
+      ["nml"] = { ["h"] =  7 },
+      ["mid"] = { ["h"] = 11 },
+      ["dbl"] = { ["h"] = 15 },
+    },
   },
+  ["tic"  ] = nil,
+  ["evt"  ] = nil,
+  ["lib"  ] = nil,
+  ["cfg"  ] = nil,
+  ["telem"] = nil,
 }
-local menuHeight = xPilot.ui.font.nml.h + 2
-local bodyHeight = LCD_H - menuHeight
-xPilot.ui.scr = {
-  --[[ ["msg" ] = { ["x"] =  0, ["y"] = menuHeight, ["h"] = bodyHeight, ["w"] = LCD_W, }, ]]
-  ["cfg" ] = { ["x"] =  0, ["y"] = menuHeight, ["h"] = bodyHeight, ["w"] = LCD_W, },
-  ["menu"] = { ["x"] =  0, ["y"] = 0,          ["h"] = menuHeight, ["w"] = LCD_W, },
-  ["main"] = { ["x"] =  0, ["y"] = menuHeight, ["h"] = bodyHeight, ["w"] = LCD_W, },
-}
-xPilot.env = {
-  ["dir"] = xEnv.dir,
-  ["file"] = {
-    ["cfg"] = xEnv.file.cfg,
-  }
-}
-xPilot.tic = nil
-xPilot.lib = nil
-xPilot.telem = nil
---[[ xPilot.msg = nil ]]
-xPilot.cfg = nil
 
-
-local xApp = nil
-local xScrn = nil
-local xLib = nil
-
-local function doScript(filename)
-  local func = nil
-  local emsg = nil
-  local ext = xEnv.scr.ext
-  for i = 1, #ext do
-    local v = xEnv.sim and ext[#ext - i + 1] or ext[i]
-    func, emsg = loadScript(filename..v)
-    if func then break end
-  end
-  return func, emsg
-end
+local app = nil
+local scrn = nil
 
 local function init(...)
-  local result = true
-  local app = xApp
-  if not app then
-    local ver, radio = getVersion()
-    if string.find(radio, "simu") then
-      xEnv.sim = true
-      xio = fio
-    end
-    local scrDir = xEnv.dir.scr
-    local scrFile = xEnv.file.scr
-    app = {}
-    for i = 1, #scrFile do
-      local fn = scrFile[i]
-      local func, emsg = doScript(scrDir..fn)
-      if not func then
-        print("Failed to load script \""..fn.."\": "..emsg)
-        return false
-      end
-      local scr = {
-        ["name"] = fn,
-        ["func"] = func(),
-        ["menu"] = fn == "menu",
-        ["main"] = fn ~= "lib" and fn ~= "telem" and fn ~= "menu" and fn ~= "alert",
+  local env = xpilot.env
+  app = {}
+  local ver, radio = getVersion()
+  local sim = string.find(radio, "simu") ~= nil
+  env.sim = sim
+  local scr = {
+    { ["file"] = "lib",   ["type"] = nil    },
+    { ["file"] = "cfg",   ["type"] = "main" },
+    { ["file"] = "telem", ["type"] = nil,   },
+    { ["file"] = "alert", ["type"] = nil,   },
+    --{ ["file"] = "log",   ["type"] = nil,   },
+    { ["file"] = "menu",  ["type"] = "menu" },
+    { ["file"] = "main",  ["type"] = "main" },
+  }
+  local fxt = (sim and ".lua" or ".luac")
+  local k = 1
+  xpilot.tic = getTime()
+  xpilot.evt = { ["handle"] = true }
+  for _,v in ipairs(scr) do
+    local file = v.file
+    local name = file
+    local lib = xpilot.lib
+    local xprint = lib and lib.print or print
+    local func, emsg = loadScript(env.dir.scr..file..fxt)
+    if func then
+      local result = func()
+      local a = {
+        ["type"] = v.type,
+        ["name"] = name,
+        ["exit"] = result.exit,
+        ["background"] = result.background,
+        ["layout"] = result.layout,
+        ["run"] = result.run,
       }
-      app[i] = scr
-      xScrn = (scr.main and i) or xScrn
-    end
-    for i = 1, #app do
-      local name = app[i].name
-      local func = app[i].func
---print("App#"..i..": "..app[i].name)
-      if name == "lib" then
-        xPilot.lib = func
-        xPilot.lib.io = xio
-        local telem = {
-          ["getFieldInfo"] = xEnv.sim and simGetFieldInfo or getFieldInfo,
-          ["getValue"    ] = xEnv.sim and simGetValue     or getValue,
-        }
-        xPilot.lib.telem = telem
-        xLib = xPilot.lib
-      elseif name == "telem" then
-        xPilot.telem = func
-      --[[ elseif name == "msg" then
-        xPilot.msg = {
-          ["push" ] = func.push,
-          ["clear"] = func.clear,
-          ["capa" ] = func.capa,
-        } ]]
-      elseif name == "cfg" then
-        xPilot.cfg = {
-          ["get"] = func.get,
-          ["set"] = func.set,
-        }
+      if result.init and result.init(xpilot, ...) then
+        xprint("Failed to execute \""..name..".init()\"")
+      else
+        xpilot[name] = result[name]
+        if a.run then
+          scrn = k
+        end
+        app[k] = a
+        k = k + 1
       end
-    end
-    xPilot.tic = getTime()
-    collectgarbage()
-  end
-  for i = 1, #app do
-    local f = app[i].func
---print("Init"..i)
-    if f.init and not f.init(...) then
-      xLib.clearTable(app[i])
-      app[i] = nil
-      result = false
-      collectgarbage()
+    else
+      xprint("Failed to load \""..file.."\": "..emsg)
     end
   end
-  xApp = app
-  return result
+  collectgarbage()
+  return true
+  --return xpilot.lib and xpilot.cfg and xpilot.telem
 end
 
 local function exit(...)
-  local result = true
-  if xApp then
-    local app = xApp
-    xApp = nil
-    xScrn = nil
-    xLib = nil
-    for i = 1, #app do
-      local f = app[i] and app[i].func
---print("Exit"..i)
-      if f and f.exit and not f.exit(...) then
-        result = false
-      end
+  local clearTable = xpilot.lib.clearTable
+  xpilot.tic = getTime()
+  for i,v in ipairs(app) do
+    if v and v.exit and v.exit(xpilot, ...) then
+      local lib = xpilot.lib
+      local xprint = lib and lib.print or print
+      xprint("Failed to execute \""..v.name..".exit()\"")
     end
-    xPilot.lib.clearTable(app)
-    xPilot.lib = nil
-    xPilot.telem = nil
-    --[[ xPilot.msg = nil ]]
-    xPilot.cfg = nil
-    collectgarbage()
+    app[i] = clearTable(v)
   end
-  return result
+  app = clearTable(app)
+  xpilot.tic = clearTable(xpilot.tic)
+  xpilot.evt = clearTable(xpilot.evt)
+  scrn = nil
+  collectgarbage()
+  return true
 end
 
 local function background(...)
-  if xApp then
-    xPilot.tic = getTime()
-    for i = 1, #xApp do
-      local f = xApp[i] and xApp[i].func
---print("Background"..i)
-      if f and f.background and not f.background(...) then
-        xLib.clearTable(f.background)
-        xApp[i].func = f
-        collectgarbage()
-      end
+  xpilot.tic = getTime()
+  for _,v in ipairs(app) do
+    if v and v.background and v.background(xpilot, ...) then
+      local lib = xpilot.lib
+      lib.print("Failed to execute \""..v.name..".background()\"")
+      v.background = lib.clearTable(v.background)
     end
   end
   return true
 end
 
 local function run(...)
-  lcd.clear()
-  local evt = xPilot.evt
-  if evt.handle and (... == evt.shft.lng) then
+  local evt = xpilot.env.evt
+  local handle = xpilot.evt.handle
+  if handle and (... == evt.shft.lng) then
     if not exit(...) then
       return false
     end
@@ -203,28 +135,32 @@ local function run(...)
       return false
     end
   end
-  if xApp then
-    xPilot.tic = getTime()
-    if evt.handle then
+  xpilot.tic = getTime()
+  if app and scrn then
+    local menuHeight = 9
+    local frame = {
+      ["menu"] = { ["x"] = 0, ["y"] = 0,          ["w"] = LCD_W, ["h"] =         menuHeight },
+      ["main"] = { ["x"] = 0, ["y"] = menuHeight, ["w"] = LCD_W, ["h"] = LCD_H - menuHeight },
+    }
+    local lib = xpilot.lib
+    lcd.clear()
+    if handle then
       local incr = ((... == evt.rght.rel) and 1) or ((... == evt.left.rel) and -1) or 0
       if incr ~= 0 then
-        for i = 1, #xApp do
-          xScrn = xScrn + incr
-          xScrn = (xScrn > #xApp and 1) or (xScrn < 1 and #xApp) or xScrn
-          if xApp[xScrn] and xApp[xScrn].main then
+        for i = 1, #app do
+          scrn = scrn + incr
+          scrn = (scrn > #app and 1) or (scrn < 1 and #app) or scrn
+          if app[scrn] and (app[scrn].type == "main") then
             break
           end
         end
       end
     end
-    for i = 1, #xApp do
-      if xApp[i] and ((i == xScrn and xApp[i].main) or xApp[i].menu) then
-        local f = xApp[i].func
-        if f and f.run and not f.run(...) then
---print("Run#"..i)
-          xLib.clearTable(f.run)
-          xApp[i].func = f
-          collectgarbage()
+    for i,v in ipairs(app) do
+      if v and v.run then
+        if (((i == scrn) and (v.type == "main")) or (v.type == "menu")) and v.run(xpilot, v.layout and v.layout(xpilot, frame[v.type]), ...) then
+          lib.print("Failed to execute \""..v.name..".run()\"")
+          app[i].run = lib.clearTable(v)
         end
       end
     end
@@ -233,7 +169,7 @@ local function run(...)
 end
 
 return {
-  init=init,
-  background=background,
-  run=run,
+  init = init,
+  background = background,
+  run = run,
 }

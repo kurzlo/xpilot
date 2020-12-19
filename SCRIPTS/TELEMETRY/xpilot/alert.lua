@@ -1,16 +1,13 @@
-local xLib = nil
-local xCfg = nil
 
-local wavFiles = {
-  ["dir"] = xPilot.env.dir.wav,
-  ["percent"] = xPilot.env.dir.wav.."percent.wav",
-  ["battery"] = xPilot.env.dir.wav.."battery.wav",
+local wavFile = {
+  ["percent"] = "percent.wav",
+  ["battery"] = "battery.wav",
   ["curr"] = {
-    ["ovrrng"] = xPilot.env.dir.wav.."highcurr.wav",
+    ["ovrrng"] = "highcurr.wav",
   },
   ["gps"] = {
-    ["deg"] = xPilot.env.dir.wav.."gpsdeg.wav",
-    ["fix"] = xPilot.env.dir.wav.."gpsfix.wav",
+    ["deg"] = "gpsdeg.wav",
+    ["fix"] = "gpsfix.wav",
   },
   ["fm"] = {
     [18] = "fm18.wav",
@@ -30,26 +27,17 @@ local wavFiles = {
     ["chg"] = "fmchange.wav",
   },
 }
-local wavUnits = { ["percent"] = 13 }
 
-local settings = {
-  ["tic"] = {
-    ["upd"] = 1,
-    ["curr"] = 2,
-  },
-  ["batt"] = {
-    ["levels"] = { [1] = 50, [2] = 30, [3] = 20, [4] = 15, [5] = 10, [6] = 5, [7] = 0 },
-  },
-}
+--local wavUnits = { ["percent"] = 13 }
 
-local data = {
-  ["tic"] = nil,
-  ["alert"] = {},
-}
+local battAlertLevel = { [1] = 50, [2] = 30, [3] = 20, [4] = 15, [5] = 10, [6] = 5, [7] = 0 }
+
+local tic = nil
+local data = nil
 
 local function battIndex(val)
   local idx
-  for i,v in pairs(settings.batt.levels) do
+  for i,v in ipairs(battAlertLevel) do
     if val > v then
       idx = i
       break
@@ -58,21 +46,19 @@ local function battIndex(val)
   return idx
 end
 
-local function alertBatt(alertData, telem, now)
-  local idx = nil
-  local battPercent = telem.batteryFuelPercent()
-  if battPercent and battPercent > 0 then
-    idx = battIndex(battPercent)
-    if not alertData then
-      alertData = { ["idx"] = idx }
-    end
-    --print("Value: "..(battPercent and battPercent or -1).." Index: "..idx.." Prev: "..(alertData and alertData.idx or -1).." Thresh: "..(alertData and alertData.idx > 1 and (battLevels[alertData.idx-1] + 5) or -1))
-    if idx > alertData.idx or (alertData.idx > 1 and battPercent > (settings.batt.levels[alertData.idx-1] + 5)) then
+local function alertBatt(alertData, xpilot)
+  local fuel = xpilot.telem.batt.fuel()
+  if fuel and fuel > 0 then
+    local idx = battIndex(fuel)
+    alertData = alertData or { ["idx"] = idx }
+    --print("Value: "..(fuel and fuel or -1).." Index: "..idx.." Prev: "..(alertData and alertData.idx or -1).." Thresh: "..(alertData and alertData.idx > 1 and (battLevels[alertData.idx-1] + 5) or -1))
+    if idx > alertData.idx or (alertData.idx > 1 and fuel > (battAlertLevel[alertData.idx-1] + 5)) then
       if idx > alertData.idx then
-        num = 5 * xLib.round(battPercent / 5)
-        playFile(wavFiles.battery)
-        playFile(wavFiles.dir..num..".wav")
-        playFile(wavFiles.percent)
+        local dir = xpilot.env.dir.wav
+        num = 5 * xpilot.lib.math.round(fuel / 5)
+        playFile(dir..wavFile.battery)
+        playFile(dir..wavFile.dir..num..".wav")
+        playFile(dir..wavFile.percent)
       end
       alertData.idx = idx
     end
@@ -80,90 +66,80 @@ local function alertBatt(alertData, telem, now)
   return alertData
 end
 
-local function alertCurr(alertData, telem, now)
-  local current = telem.actualCurrent()
-  if xLib.ticker.update(data.tic.curr, now) then
-    local batt = xPilot.cfg.get("batt")
-    local capa = batt.capa
-    local cval = batt.cval
-    if current and current > cval * capa then
-      playFile(wavFiles.curr.ovrrng)
-    end
-  end
-  return nil
-end
-
-local function alertGPS(alertData, telem, now)
-  local gps3d = telem.gps3d() 
-  if not alertData then
-    alertData = { ["gps3d"] = gps3d }
-  end
-  if alertData.gps3d ~= gps3d then
-    playFile(gps3d and wavFiles.gps.fix or wavFiles.gps.deg)
-    alertData.gps3d = gps3d
+local function alertCurr(alertData, xpilot)
+  local ITotal = xpilot.telem.batt.ITotal()
+  local batt = xpilot.cfg.get("batt")
+  if ITotal and ITotal > batt.cval * batt.capa then
+    playFile(xpilot.env.dir.wav..wavFile.curr.ovrrng)
   end
   return alertData
 end
 
-local function alertFM(alertData, telem, now)
-  local _,fm = telem.flightMode()
-  if not alertData then
-    alertData = { ["fm"] = fm }
+local function alertGPS(alertData, xpilot)
+  local fix3d = xpilot.telem.gps.fix3d() 
+  alertData = alertData or { ["fix3d"] = fix3d }
+  if alertData.fix3d ~= fix3d then
+    playFile(xpilot.env.dir.wav..(fix3d and wavFile.gps.fix or wavFile.gps.deg))
+    alertData.fix3d = fix3d
   end
+  return alertData
+end
+
+local function alertFM(alertData, xpilot)
+  local _,fm = xpilot.telem.flightMode()
+  alertData = alertData or { ["fm"] = fm }
   if alertData.fm ~= fm then
-    local f = fm > 0 and wavFiles.fm[fm] or wavFiles.fm[31--[[no telem]]]
-    playFile(wavFiles.dir..(f or wavFiles.fm.chg))
+    local f = fm > 0 and fm ~= 31 and (wavFile.fm[fm] or wavFile.fm.chg)
+    if f then 
+      playFile(xpilot.env.dir.wav..f)
+    else
+      local cfg = xpilot.cfg
+      local notify = cfg and cfg.get("telem","notify")
+      if not notify or notify > 1 then
+        playFile(xpilot.env.dir.wav..wavFile.fm[31--[[no telem]]])
+      end
+    end
     alertData.fm = fm
   end
   return alertData
 end
 
-local handler = {
-  [1] = { ["id"] = "batt", ["f"] = alertBatt, },
-  [2] = { ["id"] = "curr", ["f"] = alertCurr, },
-  [3] = { ["id"] = "gps",  ["f"] = alertGPS,  },
-  [4] = { ["id"] = "fm",   ["f"] = alertFM,   },
+local alertHandler = {
+  alertBatt,
+  alertCurr,
+  alertGPS,
+  alertFM,
 }
 
-local function init(...)
-  xLib = xPilot.lib
-  xCfg = xPilot.cfg
-  local now = xPilot.tic
-  local initTicker = xLib.ticker.initRate_Hz
-  local ticSettings = settings.tic
-  local ticData = {}
-  for i,v in pairs(ticSettings) do
-    ticData[i] = initTicker(v, now)
+local function init(xpilot, ...)
+  local ticInit = xpilot.lib.tic.init
+  local tics = {
+    ["upd"] =  2--[[Hz]],
+  }
+  tic = {}
+  local now = xpilot.tic
+  for i,v in pairs(tics) do
+    tic[i] = ticInit(v, now)
   end
-  data.tic = ticData
-  return true
+  data = {}
 end
 
-local function exit(...)
-  local ticData = data.tic
-  for i = 1, #ticData do
-    exitTicker(ticData[i])
-  end
-  data.tic = nil
-  return true
+local function exit(xpilot, ...)
+  local clearTable = xpilot.lib.clearTable
+  tic = clearTable(tic)
+  data = clearTable(data)
 end
 
-local function background(...)
-  local now = xPilot.tic
-  local xTicker = xLib.ticker
-  local updateTicker = xTicker.update
-  if updateTicker(data.tic.upd, now) then
-    local telem = xPilot.telem
-    for i = 1,#handler do
-      local h = handler[i]
-      data.alert[h.id] = h.f(data.alert[h.id], telem, now)
+local function background(xpilot, ...)
+  if xpilot.telem and xpilot.cfg and xpilot.lib.tic.update(tic.upd, xpilot.tic) then
+    for i,v in pairs(alertHandler) do
+      data[i] = v(data[i], xpilot)
     end
   end
-  return true
 end
 
 return {
-  init=init,
-  exit=exit,
-  background=background,
+  init = init,
+  exit = exit,
+  background = background,
 }

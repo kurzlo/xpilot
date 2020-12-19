@@ -1,227 +1,215 @@
-local xLib = nil
 
-local xui = xPilot.ui.scr.main
-local font = xPilot.ui.font
-local wbar = 9
-local xlab = 2 * wbar + 5
-local wlab = 10
-local wval = 35
-local xllh = 2 * wbar + 5
-local xalt = xllh + 55
-local xhdg = 100
-local yhdg = 30
-
-local cos = math.cos;
-local sin = math.sin;
-local deg2rad = math.pi / 180;
-
-local settings = {
-  ["ui"] = {
-    ["vbar"] = {
-      ["x"] = 1, ["y"] = 1, 
-      ["h"] = xui.h - 2 * (font.sml.h + 1), ["w"] = wbar, },
-    ["vtxt"] = {
-      ["x"] =  2 * wbar + 3, ["y"] = xui.h - 2 * font.sml.h },
-    ["cbar"] = {
-      ["x"] = wbar + 3, ["y"] = 1,
-      ["h"] = xui.h - 2 * (font.sml.h + 1), ["w"] = wbar, },
-    ["ctxt"] = {
-      ["x"] = 2 * wbar + 3, ["y"] = xui.h - font.sml.h },
-    ["rbar"] = {
-      ["x"] = xui.w - wbar - 1, ["y"] = 1,
-      ["h"] = xui.h - 2 * (font.sml.h + 1), ["w"] = wbar, },
-    ["rtxt"] = {
-      ["x"] = xui.w - 1, ["y"] = xui.h - 2 * font.sml.h },
-    ["dtxt"] = {
-      ["x"] = xui.w - 1, ["y"] = xui.h - font.sml.h },
-    ["sog"] = {
-      ["lab" ] = { ["x"] = xlab,                   ["y"] = 1 + font.mid.h - font.sml.h },
-      ["val" ] = { ["x"] = xlab + wlab + wval,     ["y"] = 1 },
-      ["unit"] = { ["x"] = xlab + wlab + wval + 1, ["y"] = 1 + font.mid.h - font.sml.h } },
-    ["roc"] = {
-      ["lab" ] = { ["x"] = xlab,                   ["y"] = 1 + 2 * font.mid.h - font.sml.h },
-      ["val" ] = { ["x"] = xlab + wlab + wval,     ["y"] = 1 + font.mid.h },
-      ["unit"] = { ["x"] = xlab + wlab + wval + 1, ["y"] = 1 + 2 * font.mid.h - font.sml.h } },
-    ["dalt"] = {
-      ["lab" ] = { ["x"] = xlab,                   ["y"] = 1 + 3 * font.mid.h - font.sml.h },
-      ["val" ] = { ["x"] = xlab + wlab + wval,     ["y"] = 1 + 2 * font.mid.h },
-      ["unit"] = { ["x"] = xlab + wlab + wval + 1, ["y"] = 1 + 3 * font.mid.h - font.sml.h } },
-    ["alt"] = { ["x"] = xalt, ["y"] = xui.h - font.sml.h },
-    ["lat"] = { ["x"] = xllh, ["y"] = xui.h - 2 * font.sml.h },
-    ["lon"] = { ["x"] = xllh, ["y"] = xui.h - font.sml.h },
-  },
-}
-
-local drawLine = lcd.drawLine
-local drawRectangle = lcd.drawRectangle
-local drawFilledRectangle = lcd.drawFilledRectangle
-local drawText = lcd.drawText
-
-local round = nil
-
+local arrowScale = .894427191 --1/sqrt(.5^2+1^2)
 local arrow = {
-  [1] = { ["x"] =  0, ["y"] = -2 },
-  [2] = { ["x"] =  1, ["y"] =  2 },
-  [3] = { ["x"] =  0, ["y"] =  1 },
-  [4] = { ["x"] = -1, ["y"] =  2 },
-  [5] = { ["x"] =  0, ["y"] = -2 },
+  [1] = { ["x"] =   0,              ["y"] =     -arrowScale },
+  [2] = { ["x"] =  .5 * arrowScale, ["y"] =      arrowScale },
+  [3] = { ["x"] =   0,              ["y"] = .5 * arrowScale },
+  [4] = { ["x"] = -.5 * arrowScale, ["y"] =      arrowScale },
+  [5] = { ["x"] =   0,              ["y"] =     -arrowScale },
 }
 
-local function drawArrow(x0, y0, angle, scl)
-  local s = scl or 2
-  local phi = angle * deg2rad
-  local cosphi = cos(phi)
-  local sinphi = sin(phi)
-  for i = 1, #arrow - 1 do
-    local x1 = s * (cosphi * arrow[i  ].x - sinphi * arrow[i  ].y)
-    local y1 = s * (sinphi * arrow[i  ].x + cosphi * arrow[i  ].y)
-    local x2 = s * (cosphi * arrow[i+1].x - sinphi * arrow[i+1].y)
-    local y2 = s * (sinphi * arrow[i+1].x + cosphi * arrow[i+1].y)
-    drawLine(x0 + x1, y0 + y1, x0 + x2, y0 + y2, SOLID, FORCE)
+local function drawArrow(libLCD, ui, angle)
+  libLCD.drawPolygon(ui.x, ui.y, ui.arrow, SOLID, FORCE, angle)
+end
+
+local function drawVertBar(libLCD, ui, fill)
+  libLCD.drawVertBar(ui.x, ui.y, ui.w, ui.h, fill, SOLID, FORCE)
+end
+
+local function drawVertBarTick(libLCD, ui, fill, tick)
+  libLCD.drawVertBarTick(ui.x, ui.y, ui.w, ui.h, fill, tick, SOLID, FORCE)
+end
+
+local function drawText(libLCD, ui, txt)
+  lcd.drawText(ui.x, ui.y, txt, ui.f)
+end
+
+local function drawValue(libLCD, ui, lab, val, unit)
+  drawText(libLCD, ui.l, lab)
+  drawText(libLCD, ui.v, val)
+  drawText(libLCD, ui.u, unit)
+end
+
+local function layout(xpilot, frame)
+  local font = xpilot.env.font
+  local top = frame.y + 1
+  local bottom = frame.y + frame.h
+  local left = frame.x
+  local right = frame.x + frame.w
+  local ui = {}
+  local voltageBar = {
+    ["x"] = left, ["y"] = top,
+    ["w"] = 9, ["h"] = bottom - top - 2 * font.sml.h,
+  }
+  ui.voltage = { ["bar"] = voltageBar }
+  local currentBar = {
+    ["x"] = voltageBar.x + voltageBar.w + 1, ["y"] = voltageBar.y,
+    ["w"] = voltageBar.w, ["h"] = voltageBar.h,
+  }
+  ui.current = { ["bar"] = currentBar }
+  local rssiBar = {
+    ["x"] = right - voltageBar.w, ["y"] = voltageBar.y,
+    ["w"] = voltageBar.w, ["h"] = voltageBar.h,
+  }
+  ui.rssi = { ["bar"] = rssiBar }
+  local currentTxt = {
+    ["x"] = currentBar.x + currentBar.w, ["y"] = bottom - font.sml.h + 1,
+    ["f"] = SMLSIZE + RIGHT,
+  }
+  ui.current.txt = currentTxt
+  local voltageTxt = {
+    ["x"] = currentTxt.x, ["y"] = currentTxt.y - font.sml.h,
+    ["f"] = currentTxt.f,
+  }
+  ui.voltage.txt = voltageTxt
+  local dist = {
+    ["x"] = right, ["y"] = currentTxt.y,
+    ["f"] = currentTxt.f,
+  }
+  ui.dist = dist
+  ui.rssi.txt = {
+    ["x"] = dist.x, ["y"] = voltageTxt.y,
+    ["f"] = voltageTxt.f,
+  }
+  local bar2txt = 3
+  local sogLabel = {
+    ["x"] = currentBar.x + currentBar.w + bar2txt, ["y"] = top + font.mid.h - font.sml.h,
+    ["f"] = SMLSIZE,
+  }
+  local sogValue = {
+    ["x"] = sogLabel.x + 47, ["y"] = top,
+    ["f"] = MIDSIZE + RIGHT,
+  }
+  local sogUnit = {
+    ["x"] = sogValue.x + 1, ["y"] = sogLabel.y,
+    ["f"] = SMLSIZE
+  }
+  local sogUnitWidth = 20
+  local sog = { ["l"] = sogLabel, ["v"] = sogValue, ["u"] = sogUnit }
+  ui.sog = sog
+  local roc = {
+    ["l"] = { ["x"] = sog.l.x, ["y"] = sog.l.y + font.mid.h, ["f"] = sog.l.f },
+    ["v"] = { ["x"] = sog.v.x, ["y"] = sog.v.y + font.mid.h, ["f"] = sog.v.f },
+    ["u"] = { ["x"] = sog.u.x, ["y"] = sog.u.y + font.mid.h, ["f"] = sog.u.f },
+  }
+  ui.roc = roc
+  ui.dalt = {
+    ["l"] = { ["x"] = roc.l.x, ["y"] = roc.l.y + font.mid.h, ["f"] = roc.l.f },
+    ["v"] = { ["x"] = roc.v.x, ["y"] = roc.v.y + font.mid.h, ["f"] = roc.v.f },
+    ["u"] = { ["x"] = roc.u.x, ["y"] = roc.u.y + font.mid.h, ["f"] = roc.u.f },
+  }
+  local lat = {
+    ["x"] = sogLabel.x, ["y"] = voltageTxt.y,
+    ["f"] = SMLSIZE,
+  }
+  ui.lat = lat
+  ui.lon = {
+    ["x"] = lat.x, ["y"] = currentTxt.y,
+    ["f"] = lat.f,
+  }
+  ui.alt = {
+    ["x"] = sogUnit.x, ["y"] = lat.y,
+    ["f"] = lat.f ,
+  }
+  local head = {
+    ["l"] = sogUnit.x + sogUnitWidth, ["r"] = rssiBar.x,
+    ["t"] = voltageBar.y, ["b"] = voltageBar.y + voltageBar.h,
+  }
+  head.w = head.r - head.l - 1
+  head.h = head.b - head.t - 1
+  a = {}
+  local s = .5 * xpilot.lib.math.min(head.w, head.h)
+  for i,v in pairs(arrow) do
+    a[i] = { ["x"] = s * v.x, ["y"] = s * v.y }
   end
+  ui.head = {
+    ["x"] = (head.l + head.r) / 2, ["y"] = (head.t + head.b) / 2,
+    ["arrow"] = a,
+  }
+  return ui
 end
 
-local function drawVertBar(x0, y0, w, h, fill)
-  local hFill = round(fill * h / 100)
-  local yFill = y0 + h - hFill
-  drawFilledRectangle(x0, yFill, w, hFill, FORCE)
-  drawRectangle(x0, y0, w, h, SOLID)
-end
-
-local function drawVertBarTick(x0, y0, w, h, fill, tick)
-  local hFill = round(fill * h / 100)
-  local yFill = y0 + h - hFill
-  local hTick = round(tick * h / 100)
-  if hFill == hTick then
-    drawFilledRectangle(x0, yFill, w, hFill, FORCE)
-  else
-    local yTick = y0 + h - hTick
-    if hFill < hTick then
-      drawFilledRectangle(x0, yFill, w, hFill, FORCE)
-      drawLine(x0 + 1, yTick, x0 + w - 2, yTick, SOLID, FORCE)
+local function run(xpilot, ui, ...)
+  local telem = xpilot.telem
+  if telem then
+    local cfg = xpilot.cfg
+    local lib = xpilot.lib
+    local round = lib.math.round
+    local libLCD = lib.lcd
+    local telemBatt = telem.batt
+    local telemGPS = telem.gps
+    local telemBaro = telem.baro
+    local cfgBatt = cfg and cfg.get("batt")
+    --voltage
+    local VTotal = telemBatt.VTotal()
+    local VCell = nil
+    local fill = telemBatt.fuel()
+    if cfgBatt then
+      VCell = telemBatt.VCell(VTotal, cfgBatt.cells)
+      local tick = telemBatt.VCellRel(VCell)
+      drawVertBarTick(libLCD, ui.voltage.bar, fill, tick)
+      drawText(libLCD, ui.voltage.txt, round(VCell, 1).."V")
     else
-      drawFilledRectangle(x0, yTick + 1, w, hTick - 1, FORCE)
-      hFill = hFill - hTick
-      drawFilledRectangle(x0, yFill, w, hFill, FORCE)
+      drawVertBar(libLCD, ui.voltage.bar, fill)
     end
+    drawText(libLCD, ui.voltage.txt, round(VCell or VTotal, 1).."V")
+    --current
+    local ITotal = telemBatt.ITotal()
+    if cfgBatt then
+      local cmax = cfgBatt.cmax
+      fill = telemBatt.IRel(ITotal, cfgBatt.capa, cmax)
+      local tick = 100 * cfgBatt.cval / cmax
+      drawVertBarTick(libLCD, ui.current.bar, fill, tick)
+    else
+      fill = 0
+      drawVertBar(libLCD, ui.current.bar, fill)
+    end
+    drawText(libLCD, ui.current.txt, round(ITotal).."A")
+    --rssi
+    local rssi = telem.rssi()
+    drawVertBar(libLCD, ui.rssi.bar, rssi < 100 and rssi or 100)
+    drawText(libLCD, ui.rssi.txt, round(rssi).."dB")
+    --dist
+    local dist = telem.dist()
+    drawText(libLCD, ui.dist, round(dist).."m")
+    --speed-over-ground
+    local sog = telemGPS.SoG() * 3.6
+    sog = round(sog)
+    drawValue(libLCD, ui.sog, "SoG", sog, "kmh")
+    --rate-of-climb
+    local roc = telemBaro.RoC()
+    roc = round(roc, roc < 10 and 1 or 0)
+    drawValue(libLCD, ui.roc, "RoC", roc, "m/s")
+    --relative altitude
+    local dalt = telemBaro.alt()
+    dalt = round(dalt)
+    drawValue(libLCD, ui.dalt, "Alt", dalt, "m")
+    --altitude
+    local alt = telemGPS.alt()
+    drawText(libLCD, ui.alt, round(alt, 1).."m")
+    --latitude/longitude
+    local lat, lon = telemGPS.LatLon()
+    drawText(libLCD, ui.lat, round(lat, 6))
+    drawText(libLCD, ui.lon, round(lon, 6))
+    --heading
+    local hdg = telemGPS.head();
+    drawArrow(libLCD, ui.head, hdg, 5);
   end
-  drawRectangle(x0, y0, w, h, SOLID)
-end
-
-local function drawValue(x0, y0, lab, val, digits, unit, cfg)
-  local x = x0 + cfg.lab.x
-  local y = y0 + cfg.lab.y
-  drawText(x, y, lab, SMLSIZE)
-  x = x0 + cfg.val.x
-  y = y0 + cfg.val.y
-  drawText(x, y, round(val, digits), MIDSIZE + RIGHT)
-  x = x0 + cfg.unit.x
-  y = y0 + cfg.unit.y
-  drawText(x, y, unit, SMLSIZE)
-end
-
-local function init(...)
-  xLib = xPilot.lib
-  round = xLib.round
-  --xPilot.msg.push("XPilot ready")
-  return true
-end
-
-local function run(...)
-
-  local telem = xPilot.telem
-  local xui = xPilot.ui.scr.main
-  local x0 = xui.x
-  local y0 = xui.y
-  local ui = settings.ui
-
-  --voltage bar
-  local voltage = telem.batteryCellVoltage()
-  --[[local vbar = ui.vbar
-  local x = x0 + vbar.x
-  local y = y0 + vbar.y
-  local fill = telem.batteryFuelPercent()
-  drawVertBar(x, y, vbar.w, vbar.h, fill) ]]
-  local vbar = ui.vbar
-  x = x0 + vbar.x
-  y = y0 + vbar.y
-  local fill = telem.batteryFuelPercent()
-  local tick = telem.batteryVoltagePercent(voltage)
-  drawVertBarTick(x, y, vbar.w, vbar.h, fill, tick)
-  --voltage text
-  local vtxt = ui.vtxt
-  x = x0 + vtxt.x
-  y = y0 + vtxt.y
-  drawText(x, y, round(voltage, 1).."V", SMLSIZE + RIGHT)
-  --current bar
-  local cbar = ui.cbar
-  x = x0 + cbar.x
-  y = y0 + cbar.y
-  local batt = xPilot.cfg.get("batt")
-  local capa = batt.capa
-  local cval = batt.cval
-  local cmax = batt.cmax
-  local current = telem.actualCurrent()
-  fill = telem.currentPercent(current, capa, cmax)
-  tick = 100 * cval / cmax
-  drawVertBarTick(x, y, cbar.w, cbar.h, fill, tick)
-  --current text
-  local ctxt = ui.ctxt
-  x = x0 + ctxt.x
-  y = y0 + ctxt.y
-  drawText(x, y, round(current).."A", SMLSIZE + RIGHT)
-  --rssi bar
-  local rbar = ui.rbar
-  x = x0 + rbar.x
-  y = y0 + rbar.y
-  rssi = telem.rssiValue()
-  drawVertBar(x, y, rbar.w, rbar.h, rssi)
-  --rssi text
-  local rtxt = ui.rtxt
-  x = x0 + rtxt.x
-  y = y0 + rtxt.y
-  drawText(x, y, round(rssi).."dB", SMLSIZE + RIGHT)
-  --dist text
-  local dtxt = ui.dtxt
-  x = x0 + dtxt.x
-  y = y0 + dtxt.y
-  local dist = telem.distFromHome()
-  drawText(x, y, round(dist).."m", SMLSIZE + RIGHT)
-
-  --speed-over-ground
-  local sog = telem.gpsSpeedOverGround() * 3.6
-  drawValue(x0, y0, "SoG", sog, nil, "kmh", ui.sog)
-  --rate-of-climb
-  local roc = telem.baroRateOfClimb()
-  drawValue(x0, y0, "RoC", roc, roc < 10 and 1 or nil, "m/s", ui.roc)
-  local dalt = telem.baroAltitude()
-  drawValue(x0, y0, "Alt", dalt, nil, "m", ui.dalt)
-
-  --altitude
-  local altTxt = ui.alt
-  x = x0 + altTxt.x
-  y = y0 + altTxt.y
-  local alt = telem.gpsAltitude()
-  drawText(x, y, round(alt, 1).."m", SMLSIZE)
-  --latitude/longitude
-  local latTxt = ui.lat
-  x = x0 + latTxt.x
-  y = y0 + latTxt.y
-  local lat, lon = telem.gpsLatLon()
-  drawText(x, y, round(lat, 8), SMLSIZE)
-  local lonTxt = ui.lon
-  x = x0 + lonTxt.x
-  y = y0 + lonTxt.y
-  drawText(x, y, round(lon, 8), SMLSIZE)
-
-  --heading
-  local hdg = telem.gpsHeading();
-  drawArrow(xhdg, yhdg, hdg, 5);
-
-  return true
 end
 
 return {
-  init=init,
-  run=run,
+  init = init,
+  layout = layout,
+  run = run,
 }
+
+--[[
+local function run(xpilot, ui, ...)
+  lcd.drawText(ui.x, ui.y, "Hello World")
+end
+
+return {
+  layout = function(xpilot, l, ...) return { ["x"] = l.x, ["y"] = l.y } end,
+  run = run,
+}
+]]

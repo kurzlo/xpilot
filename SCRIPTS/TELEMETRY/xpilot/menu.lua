@@ -1,124 +1,136 @@
-local xLib = nil
 
-local floor = math.floor
-local drawLine = lcd.drawLine
-local drawFilledRectangle = lcd.drawFilledRectangle
-local drawText = lcd.drawText
+local tic = nil
 
-local settings = {
-  ["tic"] = {
-    ["blink"] = 1,
-  },
-  ["ui"] = {
-    ["batt"] = { ["w"] = 14 },
-    ["rssi"] = { ["w"] = 10, ["bars"] = 5 },
-    ["gps" ] = { ["w"] = 8 },
-    ["fix" ] = { ["w"] = 12 },
-  },
-}
-
-local data = {}
-data.tic = nil
-
-local function drawBatteryPercent(x, y, w, h, value)
-  local dx = w - 1
-  drawFilledRectangle(x, y, dx, h, ERASE)
-  drawFilledRectangle(x + dx, y + 1, w - dx, h - 2, ERASE)
-  dx = dx - 2
-  drawFilledRectangle(x + 1, y + 1, floor((value * dx) / 100), h - 2)
-  return true
+local function drawBackground(xpilot, ui)
+  lcd.drawFilledRectangle(ui.x, ui.y, ui.w, ui.h, ui.f)
+  lcd.drawRectangle(ui.x, ui.y, ui.w, ui.h, ui.f)
 end
 
-local function drawRSSIValue(x, y, w, h, value, bars)
-  if not bars then bars = 5 end
+local function drawText(xpilot, ui, fm)
+  lcd.drawText(ui.x, ui.y, fm, ui.f)
+end
+
+local function drawFuel(xpilot, ui, value)
+  local drawFilledRectangle = lcd.drawFilledRectangle
+  local dx = ui.w - 1
+  drawFilledRectangle(ui.x, ui.y, dx, ui.h, ui.f)
+  drawFilledRectangle(ui.x + dx, ui.y + 1, ui.w - dx, ui.h - 2, ui.f)
+  dx = dx - 2
+  drawFilledRectangle(ui.x + 1, ui.y + 1, math.floor((value * dx) / 100), ui.h - 2)
+end
+
+local function drawRSSIValue(xpilot, ui, value)
+  local drawFilledRectangle = lcd.drawFilledRectangle
+  local bars = ui.bars or 5
+  local xmath = xpilot.lib.math
+  local floor = math.floor
   if value > 100 then
     value = 100
   end
   local space = 1
-  local dx = floor((w - space * (bars - 1)) / bars)
-  local n = xLib.round((value * bars) / 100)
-  for i = 1, n do
-    local dy = floor(i * h / bars)
-    drawFilledRectangle(x + (i - 1) * (dx + space), y + h - dy, dx, dy, ERASE)
+  local dx = floor((ui.w - space * (bars - 1)) / bars)
+  local n = xmath.round((value * bars) / 100)
+  for i = 1, (n > bars and bars or n) do
+    local dy = floor(i * ui.h / bars)
+    drawFilledRectangle(ui.x + (i - 1) * (dx + space), ui.y + ui.h - dy, dx, dy, ui.f)
   end
-  return true
 end
 
-local function drawAntenna(x0, y0, w, flags)
-  local w1 = w - 1
+local function drawAntenna(xpilot, ui)
+  local floor = math.floor
+  local w1 = ui.d - 1
   local w2 = floor(.5  * w1)
   local w3 = floor(.25 * w1)
   local w4 = floor(.75 * w1)
   for y = 0, w1-1 do
     local x = y < w2 and 0 or y - w2
-    drawLine(x0+x, y0+y, x0+y, y0+y, SOLID, flags)
+    lcd.drawLine(ui.x + x, ui.y + y, ui.x + y, ui.y + y, SOLID, ui.f)
   end
-  drawLine(x0, y0+w1, x0+w4, y0+w3, SOLID, flags)
-  drawLine(x0, y0+w1, x0+w3, y0+w1, SOLID, flags)
+  lcd.drawLine(ui.x, ui.y + w1, ui.x + w4, ui.y + w3, SOLID, ui.f)
+  lcd.drawLine(ui.x, ui.y + w1, ui.x + w3, ui.y + w1, SOLID, ui.f)
 end
 
-local function init(...)
-  xLib = xPilot.lib
-  local now = xPilot.tic
-  local initTicker = xLib.ticker.initRate_Hz
-  local ticSettings = settings.tic
-  local ticData = {}
-  for i,v in pairs(ticSettings) do
-    ticData[i] = initTicker(v, now)
+local function init(xpilot, ...)
+  local ticInit = xpilot.lib.tic.init
+  local tics = {
+    ["blnk"] = 1--[[Hz]],
+  }
+  tic = {}
+  for i,v in pairs(tics) do
+    tic[i] = ticInit(xpilot.tic, v)
   end
-  data.tic = ticData
-  return true
 end
 
-local function exit(...)
-  local exitTicker = xLib.ticker.exit
-  local ticData = data.tic
-  for i = 1, #ticData do
-    exitTicker(ticData[i])
-  end
-  data.tic = nil
-  return true
+local function exit(xpilot, ...)
+  tic = xpilot.lib.clearTable(tic)
 end
 
-local function run(...)
-  local xui = xPilot.ui.scr.menu
-  local x0 = xui.x
-  local y0 = xui.y
-  local w = xui.w
-  local h = xui.h
-  drawFilledRectangle(x0, y0, w, h)
-  local telem = xPilot.telem
-  x0 = x0 + 1
-  y0 = y0 + 1
-  drawText(x0, y0, telem.flightMode(), INVERS)
-  x0 = xui.x + w
-  h = h - 2
-  local ui = settings.ui
-  local d = ui.batt.w
-  x0 = x0 - d - 1
-  drawBatteryPercent(x0, y0, d - 1, h, telem.batteryFuelPercent())
-  d = ui.rssi.w
-  x0 = x0 - d - 1
-  drawRSSIValue(x0, y0, d - 1, h, telem.rssiValue(), ui.rssi.bars)
-  d = xLib.min(ui.gps.w, h)
-  x0 = x0 - d - 2
-  local fix = telem.gpsState()
-  local now = xPilot.tic
-  local blinkTicker = data.tic.blink
-  xLib.ticker.update(blinkTicker, now)
-  if fix > 1 or blinkTicker.delta >= blinkTicker.period / 2 then
-    drawAntenna(x0, y0, d, ERASE)
+local function layout(xpilot, frame)
+  local top = frame.y + 1
+  local bottom = frame.y + frame.h - 1
+  local left = frame.x + 1
+  local right = frame.x + frame.w - 1
+  local ui = { ["bg"] = frame }
+  ui.bg.f = SOLID
+  local battWidth = 16
+  local batt = {
+    ["x"] = right - battWidth, ["y"] = top,
+    ["w"] = battWidth, ["h"] = bottom - top,
+    ["f"] = ERASE,
+  }
+  ui.batt = batt
+  local rssiWidth = 10
+  local rssi = {
+    ["x"] = batt.x - rssiWidth - 1, ["y"] = top,
+    ["w"] = rssiWidth, ["h"] = batt.h,
+    ["f"] = ERASE,
+    ["bars"] = 5,
+  }
+  ui.rssi = rssi
+  local gpsWidth = 8
+  local gps = {
+    ["x"] = rssi.x - gpsWidth, ["y"] = top,
+    ["d"] = xpilot.lib.math.min(batt.h, gpsWidth),
+    ["f"] = ERASE,
+  }
+  ui.gps = gps
+  ui.fix = {
+    ["x"] = gps.x - 12, ["y"] = top,
+    ["f"] = INVERS,
+  }
+  ui.fm = {
+    ["x"] = left, ["y"] = top,
+    ["f"] = INVERS,
+  }
+  return ui
+end
+
+local function run(xpilot, ui, ...)
+  drawBackground(xpilot, ui.bg)
+  local telem = xpilot.telem
+  if telem then
+    local lib = xpilot.lib
+    drawText(xpilot, ui.fm, telem.flightMode())
+    drawFuel(xpilot, ui.batt, telem.batt.fuel())
+    drawRSSIValue(xpilot, ui.rssi, telem.rssi())
+    local gps = telem.gps
+    local fix = gps.state()
+    if fix > 1 then
+      drawAntenna(xpilot, ui.gps)
+      drawText(xpilot, ui.fix, gps.fix(fix))
+    else
+      local blnk = tic.blnk
+      lib.tic.update(blnk, xpilot.tic)
+      if blnk.delta >= (blnk.period / 2) then
+        drawAntenna(xpilot, ui.gps)
+      end
+    end
   end
-  d = ui.fix.w
-  x0 = x0 - d - 1
-  if fix > 1 then
-    drawText(x0, y0, telem.gpsFix(fix), INVERS)
-  end
-  return true
 end
 
 return {
-  init=init,
-  exit=exit,
-  run=run,
+  init = init,
+  exit = exit,
+  layout = layout,
+  run = run,
 }

@@ -1,21 +1,18 @@
-local xLib = nil
 
-local settings = {}
-settings.table = {
+local tab = {
   { ["hdr"] = "Battery" },
   { ["itm"] =   "Cells",        ["grp"] = "batt", ["val"] = "cells", ["unit"] = nil,   ["num"] = { ["min"] =   1, ["max"] =    10, ["inc"] =   1 } },
   { ["itm"] =   "Capacity",     ["grp"] = "batt", ["val"] = "capa",  ["unit"] = "mAh", ["num"] = { ["min"] = 500, ["max"] = 10000, ["inc"] = 100 } },
   { ["itm"] =   "Avg C-Value",  ["grp"] = "batt", ["val"] = "cval",  ["unit"] = nil,   ["num"] = { ["min"] =  10, ["max"] =   500, ["inc"] =   5 } },
   { ["itm"] =   "Max C-Value",  ["grp"] = "batt", ["val"] = "cmax",  ["unit"] = nil,   ["num"] = { ["min"] =  10, ["max"] =   500, ["inc"] =   5 } },
   { ["hdr"] = "Telemetry" },
+  { ["itm"] =   "Update Rate",  ["grp"] = "telem", ["val"] = "updRate", ["unit"] = "Hz",  ["num"] = { ["min"] = 1, ["max"] = 10, ["inc"] = 1 } },
   { ["itm"] =   "Logging",      ["grp"] = "telem", ["val"] = "rec",     ["unit"] = nil,   ["combo"] = { [1] = "Disabled", [2] = "Enabled" } },
-  { ["itm"] =   "Update Rate",  ["grp"] = "telem", ["val"] = "updRate", ["unit"] = "Hz",  ["num"] = { ["min"] = 1, ["max"] = 10, ["inc"] = 1 }  },
-  { ["itm"] =   "Logging Rate", ["grp"] = "telem", ["val"] = "logRate", ["unit"] = "Hz",  ["num"] = { ["min"] = 1, ["max"] = 10, ["inc"] = 1 }  },
+  { ["itm"] =   "Logging Rate", ["grp"] = "telem", ["val"] = "logRate", ["unit"] = "Hz",  ["num"] = { ["min"] = 1, ["max"] = 10, ["inc"] = 1 } },
+  { ["itm"] =   "Notify loss",  ["grp"] = "telem", ["val"] = "notify",  ["unit"] = nil,   ["combo"] = { [1] = "Disabled", [2] = "Enabled" } },
 }
 
-local data = {}
-data.ui = nil
-data.cfg = {
+local config = {
   ["batt"] = {
     ["cells"] = 4,
     ["capa" ] = 1800,
@@ -23,15 +20,16 @@ data.cfg = {
     ["cmax" ] = 135,
   },
   ["telem"] = {
+    ["updRate"] = 1,
     ["rec"] = 1,
-    ["updRate"] = 5,
     ["logRate"] = 1,
-  }
+    ["notify"] = 1,
+  },
 }
 
+local ctl = nil
 
 local function firstItem()
-  local tab = settings.table
   local first = 1
   while tab[first].itm == nil and first <= #tab do
     first = first + 1
@@ -39,42 +37,40 @@ local function firstItem()
   return first <= #tab and first
 end
 
-local function updnEvent(...)
-  local evt = xPilot.evt
-  local ui = data.ui
-  local tab = settings.table
+local function updnEvent(xpilot, ...)
+  local evt = xpilot.env.evt
   if (... == evt.dn.rel) then
-    local last = ui.first + ui.pageSize
-    while ui.sel < #tab do
-      ui.sel = ui.sel + 1
-      if ui.sel >= last then
-        ui.first = ui.first + 1
+    local last = ctl.first + ctl.pageSize
+    while ctl.sel < #tab do
+      ctl.sel = ctl.sel + 1
+      if ctl.sel >= last then
+        ctl.first = ctl.first + 1
       end
-      if tab[ui.sel].itm then
+      if tab[ctl.sel].itm then
         break
       end
     end
   end
   if (... == evt.up.rel) then
     local first = firstItem()
-    while ui.sel > first do
-      ui.sel = ui.sel - 1
-      if ui.sel < ui.first then
-        ui.first = ui.first - 1
+    while ctl.sel > first do
+      ctl.sel = ctl.sel - 1
+      if ctl.sel < ctl.first then
+        ctl.first = ctl.first - 1
       end
-      if ui.sel == first then
-        ui.first = first - 1
+      if ctl.sel == first then
+        ctl.first = first - 1
       end
-      if tab[ui.sel].itm then
+      if tab[ctl.sel].itm then
         break
       end
     end
   end
 end
 
-function verifyEntry(v, grp, val)
+local function verifyEntry(v, grp, val)
   if grp == "batt" then
-    local batt = data.cfg.batt
+    local batt = config.batt
     if val == "cval" then
       return v <= batt.cmax
     elseif val == "cmax" then
@@ -84,37 +80,34 @@ function verifyEntry(v, grp, val)
   return true
 end
 
-local function enterEvent(...)
-  local evt = xPilot.evt
-  local ui = data.ui
+local function enterEvent(xpilot, ...)
+  local env = xpilot.env
+  local lib = xpilot.lib
+  local evt = env.evt
   local writeConfig = false
   if (... == evt.entr.rel) then
-    evt.handle = ui.enter
-    writeConfig = ui.enter
-    ui.enter = not ui.enter
+    xpilot.evt.handle = ctl.enter
+    writeConfig = ctl.enter
+    ctl.enter = not ctl.enter
   end
-  if ui.enter then
-    local tab = settings.table
-    local v = tab[ui.sel]
+  if ctl.enter then
+    local v = tab[ctl.sel]
     if v.grp and v.val then
-      local cfg = data.cfg
-      local cfgGrp = cfg[v.grp]
+      local cfgGrp = config[v.grp]
       local val = cfgGrp[v.val]
-      local right = (... == evt.rght.rel)
-      local left = (... == evt.left.rel)
       if val then
         if v.num or v.combo then
           local inc = v.num and v.num.inc or 1
-          local min = v.num and v.num.min or 1
-          local max = v.num and v.num.max or #v.combo
           local newVal = val
-          if right then
+          if (... == evt.rght.rel) then
+            local vmax = v.num and v.num.max or #v.combo
             newVal = val + inc
-            newVal = xLib.min(newVal, max)
+            newVal = lib.math.min(newVal, vmax)
           end
-          if left then
+          if (... == evt.left.rel) then
+            local vmin = v.num and v.num.min or 1
             newVal = val - inc
-            newVal = xLib.max(newVal, min)
+            newVal = lib.math.max(newVal, vmin)
           end
           if verifyEntry(newVal, v.grp, v.val) then
             cfgGrp[v.val] = newVal;
@@ -124,14 +117,11 @@ local function enterEvent(...)
     end
   end
   if writeConfig then
-    local xEnv = xPilot.env
-    local xio = xLib.io
-    local cfgDir = xEnv.dir.cfg
-    local cfgFile = xEnv.file.cfg
-    local fid = xio.open(cfgDir..cfgFile..".cfg", "w")
+    local xio = lib.io
+    local file = env.cfg.file
+    local fid = xio.open(env.dir.cfg..file..".cfg", "w")
     if fid then
-      local cfg = data.cfg
-      for i,vi in pairs(cfg) do
+      for i,vi in pairs(config) do
         xio.write(fid, i.."={")
         for j,vj in pairs(vi) do
           xio.write(fid, j.."="..vj..";")
@@ -139,12 +129,14 @@ local function enterEvent(...)
         xio.write(fid, "}\n")
       end
       xio.close(fid)
+    else
+      lib.print("Failed to write configuration \""..file.."\"")
     end
   end
 end
 
-local function readConfig(fid, ...)
-  local xio = xLib.io
+local function readConfig(xpilot, fid, ...)
+  local xio = xpilot.lib.io
   local buf = ""
   local vi, i
   if not vi then vi = {} end
@@ -159,7 +151,7 @@ local function readConfig(fid, ...)
       vi[i] = buf
       buf = ""
     elseif c == "{" then
-      vi[i] = readConfig(fid, vi)
+      vi[i] = readConfig(xpilot, fid, vi)
     elseif c == "}" then
       break
     elseif c ~= "\n" then
@@ -169,73 +161,80 @@ local function readConfig(fid, ...)
   return vi
 end
 
-local function init(...)
-  local xui = xPilot.ui.scr.cfg
-  local font = xPilot.ui.font
-  xLib = xPilot.lib
-  local ui = {}
-  ui.sel = firstItem()
-  ui.first = 1
-  ui.pageSize = math.floor(xui.h / font.sml.h)
-  ui.enter = false
-  data.ui = ui
-  local xEnv = xPilot.env
-  local xio = xLib.io
-  local cfgDir = xEnv.dir.cfg
-  local cfgFile = xEnv.file.cfg
-  local fid = xio.open(cfgDir..cfgFile..".cfg", "r")
+local function init(xpilot, ...)
+  local env = xpilot.env
+  local lib = xpilot.lib
+  ctl = {
+    ["sel"] = firstItem(),
+    ["first"] = 1,
+    ["pageSize"] = 0,
+    ["enter"] = false,
+  }
+  local xio = lib.io
+  local file = env.cfg.file
+  local fid = xio.open(env.dir.cfg..file..".cfg", "r")
   if fid then
-    local newCfg = readConfig(fid)
+    local newCfg = readConfig(xpilot, fid)
     xio.close(fid)
-    local cfg = data.cfg
-    for i,vi in pairs(cfg) do
+    for i,vi in pairs(config) do
       for m,vm in pairs(newCfg) do
         if m == i then
           for j,_ in pairs(vi) do
             for n,vn in pairs(vm) do
               if n == j then
-                cfg[i][j] = tonumber(vn)
+                config[i][j] = tonumber(vn)
               end
             end
           end
         end
       end
     end
-    data.cfg = cfg
+  else
+    lib.print("Failed to open configuration \""..file.."\"")
   end
-  return true
 end
 
-local function run(...)
-  local ui = data.ui
-  enterEvent(...)
-  if not ui.enter then
-    updnEvent(...)
+local function exit(xpilot, ...)
+  ctl = xpilot.lib.clearTable(ctl)
+end
+
+local function layout(xpilot, frame)
+  local ui = frame
+  ui.stride = xpilot.env.font.sml.h
+  ui.pageSize = math.floor(frame.h / ui.stride)
+  return ui
+end
+
+local function run(xpilot, ui, ...)
+  ctl.pageSize = ui.pageSize
+  enterEvent(xpilot, ...)
+  if not ctl.enter then
+    updnEvent(xpilot, ...)
   end
-  local tab = settings.table
-  local cfg = data.cfg
-  local xui = xPilot.ui.scr.cfg
-  local fontSize = xPilot.ui.font.sml.h
-  local x0 = xui.x
-  local x1 = x0 + 4
-  local x2 = x0 + math.floor(xui.w / 2)
-  local y = xui.y + 1
-  local last = xLib.min(#tab, ui.first + ui.pageSize)
+  local env = xpilot.env
+  local lib = xpilot.lib
+  local xmath = lib.math
   local drawText = lcd.drawText
-  for i = ui.first, last do
+  local stride = ui.stride
+  local x0 = ui.x
+  local x1 = x0 + 4
+  local x2 = x0 + math.floor(ui.w / 2)
+  local y = ui.y + 1
+  local last = xmath.min(#tab, ctl.first + ctl.pageSize)
+  for i = ctl.first, last do
     local v = tab[i]
     if v.hdr then
       drawText(x0, y, v.hdr, SMLSIZE)
-      y = y + fontSize
+      y = y + stride
     end
     if v.itm then
-      local val = v.grp and v.val and cfg[v.grp][v.val]
+      local val = v.grp and v.val and config[v.grp][v.val]
       if val then
         local flags = SMLSIZE
         drawText(x1, y, v.itm, flags)
-        if i == ui.sel then
+        if i == ctl.sel then
           flags = flags + INVERS
-          if ui.enter then
+          if ctl.enter then
             flags = flags + BLINK
           end
         end
@@ -246,30 +245,35 @@ local function run(...)
           vstr = v.combo[val]
         end
         drawText(x2, y, vstr..(v.unit and " "..v.unit or ""), flags)
-        y = y + fontSize
+        y = y + stride
       end
     end
   end
-  return true
 end
 
-function get(grp,val)
-  return (val and data.cfg[grp][val]) or (grp and data.cfg[grp]) or data.cfg
+local function getConfig(grp,val)
+  return (val and config[grp][val]) or (grp and config[grp]) or config
 end
 
-function set(grp,val, v)
+local function setConfig(grp,val, v)
   if val then
-    data.cfg[grp][val] = v
+    config[grp][val] = v
   elseif grp then
-    data.cfg[grp] = v
+    config[grp] = v
   else
-    data.cfg = v
+    config = v
   end
 end
 
+local cfg = {
+  ["get"] = getConfig,
+  ["set"] = setConfig,
+}
+
 return {
-  init=init,
-  run=run,
-  get=get,
-  set=set,
+  init = init,
+  exit = exit,
+  layout = layout,
+  run = run,
+  cfg = cfg,
 }
