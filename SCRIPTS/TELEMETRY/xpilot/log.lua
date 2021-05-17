@@ -116,6 +116,8 @@ local function background(xpilot, ...)
             lib.print("Failed to open logfile \""..file.."\"")
           end
           tic.log.total = 0
+          collectgarbage()
+          collectgarbage()
         end
         if logFile then
           local ln = tostring(tic.log.total)..delim
@@ -123,11 +125,15 @@ local function background(xpilot, ...)
             ln = appendValue(ln, v.name, v.val)
           end
           xwrite(logFile, ln.."\n")
+          collectgarbage()
+          collectgarbage()
         end
       else
         if logFile then
           xio.close(logFile)
           logFile = nil
+          collectgarbage()
+          collectgarbage()
         end
       end
     end

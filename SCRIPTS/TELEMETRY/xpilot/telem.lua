@@ -1,7 +1,6 @@
 
 local flightModeStr = {
   -- APM Flight Modes
-  --[[
   [ 0] = "Stabilize",
   [ 1] = "Acro",
   [ 2] = "Alt Hold",
@@ -20,7 +19,6 @@ local flightModeStr = {
   [15] = "Auto Tune",
   [16] = "Pos Hold",
   [17] = "Brake",
-  ]]
   -- PX4 Flight Modes
   [18] = "Manual",
   [19] = "Acro",
@@ -39,6 +37,7 @@ local flightModeStr = {
   [31] = "No Telemetry",
 }
 
+--[[
 local navStateStr = {
   [ 0] = "Manual",
   [ 1] = "Altitude",
@@ -63,6 +62,7 @@ local navStateStr = {
   [20] = "Prec land",
   [21] = "Orbit",
 }
+]]
 
 local gpsStateStr = {
   [1] = "N/A",
@@ -153,6 +153,8 @@ local function init(xpilot, ...)
       }
     end
   end
+  collectgarbage()
+  collectgarbage()
   for i = 2, #battTable do
     local dv = battTable[i].v - battTable[i-1].v
     local dp = battTable[i].p - battTable[i-1].p
@@ -176,6 +178,8 @@ local function background(xpilot, ...)
     for _,v in pairs(telemTab) do
       v.val = v.id and getValue(v.id)
     end
+    collectgarbage()
+    collectgarbage()
   end
   local cfg = xpilot.cfg
   if cfg and update(tic.cfg, now) then
@@ -184,17 +188,19 @@ local function background(xpilot, ...)
 end
 
 local function flightMode(idx)
-  idx = idx or (idxTmp1 and telemTab[idxTmp1].val)
+  idx = idx or (telemTab[idxTmp1] and telemTab[idxTmp1].val)
   return (idx and flightModeStr[idx] or "N/A"), idx
 end
 
+--[[
 local function navState(idx)
   idx = idx or (idx5000 and telemTab[idx5000].val)
   return idx and idx >= 128 and navStateStr[idx - 128] or "N/A"
 end
+]]
 
 local function battVTotal()
-  return idxVFAS and telemTab[idxVFAS].val or 0
+  return telemTab[idxVFAS] and telemTab[idxVFAS].val or 0
 end
 
 local function battVCell(VTotal, cells)
@@ -220,7 +226,7 @@ local function battVCellRel(VCell)
 end
 
 local function battITotal()
-  return idxCurr and telemTab[idxCurr].val or 0
+  return telemTab[idxCurr] and telemTab[idxCurr].val or 0
 end
 
 local function battIRel(ITotal, capa, cmax)
@@ -235,11 +241,11 @@ local function battIRel(ITotal, capa, cmax)
 end
 
 local function battFuel()
-  return idxFuel and telemTab[idxFuel].val or 0
+  return telemTab[idxFuel] and telemTab[idxFuel].val or 0
 end
 
 local function gpsState()
-  local state = idxTmp2 and telemTab[idxTmp2].val
+  local state = telemTab[idxTmp2] and telemTab[idxTmp2].val
   local sats = state and state / 10 or 0
   local fix = state and state % 10 or 0
   return fix, sats
@@ -256,7 +262,7 @@ local function gpsFix3d(state)
 end
 
 local function gpsLatLon()
-  local gps = idxGPS and telemTab[idxGPS].val
+  local gps = telemTab[idxGPS] and telemTab[idxGPS].val
   if gps and type(gps) == "table" then
     return gps.lat or 0, gps.lon or 0
   else
@@ -265,37 +271,37 @@ local function gpsLatLon()
 end
 
 local function gpsAlt()
-  return idxGAlt and telemTab[idxGAlt].val or 0
+  return telemTab[idxGAlt] and telemTab[idxGAlt].val or 0
 end
 
 local function gpsSoG()
-  local val = idxGSpd and telemTab[idxGSpd].val
+  local val = telemTab[idxGSpd] and telemTab[idxGSpd].val
   return val and val * 0.514444 --[[knots --> m/s]] or 0
 end
 
 local function gpsHead()
-  return idxHdg and telemTab[idxHdg].val or 0
+  return telemTab[idxHdg] and telemTab[idxHdg].val or 0
 end
 
 local function baroAlt() --meters
-  return idxAlt and telemTab[idxAlt].val or 0
+  return telemTab[idxAlt] and telemTab[idxAlt].val or 0
 end
 
 local function baroRoC() 
-  return idxVSpd and telemTab[idxVSpd].val or 0
+  return telemTab[idxVSpd] and telemTab[idxVSpd].val or 0
 end
 
 local function rssi()
-  return idxRSSI and telemTab[idxRSSI].val or 0
+  return telemTab[idxRSSI] and telemTab[idxRSSI].val or 0
 end
 
 local function dist() --meters
-  return idxDist and telemTab[idxDist].val or 0
+  return telemTab[idxDist] and telemTab[idxDist].val or 0
 end
 
 local telem = {
   ["flightMode"] = flightMode,
-  ["navState"] = navState,
+  --["navState"] = navState,
   ["batt"] = {
     ["VTotal"  ] = battVTotal,
     ["VCell"   ] = battVCell,

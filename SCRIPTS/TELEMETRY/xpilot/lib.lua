@@ -8,6 +8,7 @@ local function clearTable(t)
       t[i] = nil
     end
     collectgarbage()
+    collectgarbage()
   end
   return nil
 end

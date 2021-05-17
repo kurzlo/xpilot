@@ -1,30 +1,50 @@
 
 local wavFile = {
-  ["percent"] = "percent.wav",
-  ["battery"] = "battery.wav",
+  ["percent"] = "percent",
+  ["battery"] = "battery",
   ["curr"] = {
-    ["ovrrng"] = "highcurr.wav",
+    ["ovrrng"] = "highcurr",
   },
   ["gps"] = {
-    ["deg"] = "gpsdeg.wav",
-    ["fix"] = "gpsfix.wav",
+    ["deg"] = "gpsdeg",
+    ["fix"] = "gpsfix",
   },
   ["fm"] = {
-    [18] = "fm18.wav",
-    [19] = "fm19.wav",
-    [20] = "fm20.wav",
-    [21] = "fm21.wav",
-    [22] = "fm22.wav",
-    [23] = "fm23.wav",
-    [24] = "fm24.wav",
-    [25] = "fm25.wav",
-    [26] = "fm26.wav",
-    [27] = "fm27.wav",
-    [28] = "fm28.wav",
-    [29] = "fm29.wav",
-    [30] = "fm30.wav",
-    [31] = "fm31.wav",
-    ["chg"] = "fmchange.wav",
+    -- APM Flight Modes
+    [ 0] = "fm0",
+    [ 1] = "fm1",
+    [ 2] = "fm2",
+    [ 3] = "fm3",
+    [ 4] = "fm4",
+    [ 5] = "fm5",
+    [ 6] = "fm6",
+    [ 7] = "fm7",
+    [ 8] = "fm8",
+    [ 9] = "fm9",
+    [10] = "fm10",
+    [11] = "fm11",
+    [12] = "fm12",
+    [13] = "fm13",
+    [14] = "fm14",
+    [15] = "fm15",
+    [16] = "fm16",
+    [17] = "fm17",
+    -- PX4 Flight Modes
+    [18] = "fm18",
+    [19] = "fm19",
+    [20] = "fm20",
+    [21] = "fm21",
+    [22] = "fm22",
+    [23] = "fm23",
+    [24] = "fm24",
+    [25] = "fm25",
+    [26] = "fm26",
+    [27] = "fm27",
+    [28] = "fm28",
+    [29] = "fm29",
+    [30] = "fm30",
+    [31] = "fm31",
+    [32] = "fmchange",
   },
 }
 
@@ -56,9 +76,11 @@ local function alertBatt(alertData, xpilot)
       if idx > alertData.idx then
         local dir = xpilot.env.dir.wav
         num = 5 * xpilot.lib.math.round(fuel / 5)
-        playFile(dir..wavFile.battery)
+        playFile(dir..wavFile.battery..".wav")
         playFile(dir..wavFile.dir..num..".wav")
-        playFile(dir..wavFile.percent)
+        playFile(dir..wavFile.percent..".wav")
+        collectgarbage()
+        collectgarbage()
       end
       alertData.idx = idx
     end
@@ -68,9 +90,13 @@ end
 
 local function alertCurr(alertData, xpilot)
   local ITotal = xpilot.telem.batt.ITotal()
-  local batt = xpilot.cfg.get("batt")
-  if ITotal and ITotal > batt.cval * batt.capa then
-    playFile(xpilot.env.dir.wav..wavFile.curr.ovrrng)
+  local cfg = xpilot.cfg
+  local batt = cfg and cfg.get("batt")
+  local IMax = batt and (batt.cval * batt.capa) or 0
+  if ITotal and ITotal > IMax then
+    playFile(xpilot.env.dir.wav..wavFile.curr.ovrrng..".wav")
+    collectgarbage()
+    collectgarbage()
   end
   return alertData
 end
@@ -79,8 +105,10 @@ local function alertGPS(alertData, xpilot)
   local fix3d = xpilot.telem.gps.fix3d() 
   alertData = alertData or { ["fix3d"] = fix3d }
   if alertData.fix3d ~= fix3d then
-    playFile(xpilot.env.dir.wav..(fix3d and wavFile.gps.fix or wavFile.gps.deg))
+    playFile(xpilot.env.dir.wav..(fix3d and wavFile.gps.fix or wavFile.gps.deg)..".wav")
     alertData.fix3d = fix3d
+    collectgarbage()
+    collectgarbage()
   end
   return alertData
 end
@@ -89,14 +117,18 @@ local function alertFM(alertData, xpilot)
   local _,fm = xpilot.telem.flightMode()
   alertData = alertData or { ["fm"] = fm }
   if alertData.fm ~= fm then
-    local f = fm > 0 and fm ~= 31 and (wavFile.fm[fm] or wavFile.fm.chg)
+    local f = fm >= 0 and fm ~= 31 and (wavFile.fm[fm] or wavFile.fm[32--[[change]]])
     if f then 
-      playFile(xpilot.env.dir.wav..f)
+      playFile(xpilot.env.dir.wav..f..".wav")
+      collectgarbage()
+      collectgarbage()
     else
       local cfg = xpilot.cfg
       local notify = cfg and cfg.get("telem","notify")
       if not notify or notify > 1 then
-        playFile(xpilot.env.dir.wav..wavFile.fm[31--[[no telem]]])
+        playFile(xpilot.env.dir.wav..wavFile.fm[31--[[no telem]]]..".wav")
+        collectgarbage()
+        collectgarbage()
       end
     end
     alertData.fm = fm

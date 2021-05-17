@@ -1,5 +1,5 @@
 require("wx")
-require("turtle")
+require("turtle") --[[https://github.com/pkulchenko/ZeroBraneEduPack/blob/master/turtle.lua]]
 require("otx")
 
 --lcd

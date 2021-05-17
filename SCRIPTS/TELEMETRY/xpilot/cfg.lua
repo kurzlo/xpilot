@@ -132,6 +132,8 @@ local function enterEvent(xpilot, ...)
     else
       lib.print("Failed to write configuration \""..file.."\"")
     end
+    collectgarbage()
+    collectgarbage()
   end
 end
 
@@ -158,6 +160,8 @@ local function readConfig(xpilot, fid, ...)
       buf = buf..c
     end
   end
+  collectgarbage()
+  collectgarbage()
   return vi
 end
 
@@ -198,15 +202,10 @@ local function exit(xpilot, ...)
   ctl = xpilot.lib.clearTable(ctl)
 end
 
-local function layout(xpilot, frame)
-  local ui = frame
-  ui.stride = xpilot.env.font.sml.h
-  ui.pageSize = math.floor(frame.h / ui.stride)
-  return ui
-end
-
-local function run(xpilot, ui, ...)
-  ctl.pageSize = ui.pageSize
+local function run(xpilot, x, y, w, h, ...)
+  local stride = xpilot.env.font.sml.h
+  local pageSize = math.floor(h / stride)
+  ctl.pageSize = pageSize
   enterEvent(xpilot, ...)
   if not ctl.enter then
     updnEvent(xpilot, ...)
@@ -215,12 +214,12 @@ local function run(xpilot, ui, ...)
   local lib = xpilot.lib
   local xmath = lib.math
   local drawText = lcd.drawText
-  local stride = ui.stride
-  local x0 = ui.x
+  local stride = stride
+  local x0 = x
   local x1 = x0 + 4
-  local x2 = x0 + math.floor(ui.w / 2)
-  local y = ui.y + 1
-  local last = xmath.min(#tab, ctl.first + ctl.pageSize)
+  local x2 = x0 + math.floor(w / 2)
+  local y = y + 1
+  local last = xmath.min(#tab, ctl.first + pageSize)
   for i = ctl.first, last do
     local v = tab[i]
     if v.hdr then
@@ -273,7 +272,6 @@ local cfg = {
 return {
   init = init,
   exit = exit,
-  layout = layout,
   run = run,
   cfg = cfg,
 }
