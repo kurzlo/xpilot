@@ -46,13 +46,13 @@ local function init(...)
   local sim = string.find(radio, "simu") ~= nil
   env.sim = sim
   local scr = {
-    { ["file"] = "lib",   ["type"] = nil    },
-    { ["file"] = "cfg",   ["type"] = "main" },
-    { ["file"] = "telem", ["type"] = nil,   },
-    { ["file"] = "alert", ["type"] = nil,   },
-    --{ ["file"] = "log",   ["type"] = nil,   },
-    { ["file"] = "menu",  ["type"] = "menu" },
-    { ["file"] = "main",  ["type"] = "main" },
+    { ["file"] = "lib" },
+    { ["file"] = "cfg" },
+    { ["file"] = "telem" },
+    { ["file"] = "alert" },
+    { ["file"] = "log" },
+    { ["file"] = "menu" },
+    { ["file"] = "main" },
   }
   local fxt = (sim and ".lua" or ".luac")
   local k = 1
@@ -67,18 +67,16 @@ local function init(...)
     if func then
       local result = func()
       local a = {
-        ["type"] = v.type,
         ["name"] = name,
         ["exit"] = result.exit,
         ["background"] = result.background,
-        ["layout"] = result.layout,
         ["run"] = result.run,
       }
       if result.init and result.init(xpilot, ...) then
         xprint("Failed to execute \""..name..".init()\"")
       else
         xpilot[name] = result[name]
-        if a.run then
+        if a.run and a.name ~= "menu" then
           scrn = k
         end
         app[k] = a
@@ -87,8 +85,9 @@ local function init(...)
     else
       xprint("Failed to load \""..file.."\": "..emsg)
     end
+    collectgarbage()
+    collectgarbage()
   end
-  collectgarbage()
   return true
   --return xpilot.lib and xpilot.cfg and xpilot.telem
 end
@@ -109,6 +108,7 @@ local function exit(...)
   xpilot.evt = clearTable(xpilot.evt)
   scrn = nil
   collectgarbage()
+  collectgarbage()
   return true
 end
 
@@ -120,6 +120,8 @@ local function background(...)
       lib.print("Failed to execute \""..v.name..".background()\"")
       v.background = lib.clearTable(v.background)
     end
+    collectgarbage()
+    collectgarbage()
   end
   return true
 end
@@ -137,11 +139,6 @@ local function run(...)
   end
   xpilot.tic = getTime()
   if app and scrn then
-    local menuHeight = 9
-    local frame = {
-      ["menu"] = { ["x"] = 0, ["y"] = 0,          ["w"] = LCD_W, ["h"] =         menuHeight },
-      ["main"] = { ["x"] = 0, ["y"] = menuHeight, ["w"] = LCD_W, ["h"] = LCD_H - menuHeight },
-    }
     local lib = xpilot.lib
     lcd.clear()
     if handle then
@@ -150,18 +147,25 @@ local function run(...)
         for i = 1, #app do
           scrn = scrn + incr
           scrn = (scrn > #app and 1) or (scrn < 1 and #app) or scrn
-          if app[scrn] and (app[scrn].type == "main") then
+          local a = app[scrn]
+          if a and a.run and a.name ~= "menu" then
             break
           end
         end
       end
     end
+    local menuHeight = 9
     for i,v in ipairs(app) do
-      if v and v.run then
-        if (((i == scrn) and (v.type == "main")) or (v.type == "menu")) and v.run(xpilot, v.layout and v.layout(xpilot, frame[v.type]), ...) then
+      local menu = v.name == "menu"
+      local main = i == scrn
+      if v and v.run and (main or menu) then
+        if    (menu and v.run(xpilot, 0,          0, LCD_W,         menuHeight, ...))
+           or (main and v.run(xpilot, 0, menuHeight, LCD_W, LCD_H - menuHeight, ...)) then
           lib.print("Failed to execute \""..v.name..".run()\"")
           app[i].run = lib.clearTable(v)
         end
+        collectgarbage()
+        collectgarbage()
       end
     end
   end
