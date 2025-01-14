@@ -77,7 +77,7 @@ local function alertBatt(alertData, xpilot)
         local dir = xpilot.env.dir.wav
         num = 5 * xpilot.lib.math.round(fuel / 5)
         playFile(dir..wavFile.battery..".wav")
-        playFile(dir..wavFile.dir..num..".wav")
+        playFile(dir..num..".wav")
         playFile(dir..wavFile.percent..".wav")
         collectgarbage()
         collectgarbage()
