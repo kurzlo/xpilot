@@ -139,6 +139,11 @@ local function run(...)
   end
   xpilot.tic = getTime()
   if app and scrn then
+    local menuHeight = 9
+    local frame = {
+      ["menu"] = { ["x"] = 0, ["y"] = 0,          ["w"] = LCD_W, ["h"] =         menuHeight },
+      ["main"] = { ["x"] = 0, ["y"] = menuHeight, ["w"] = LCD_W, ["h"] = LCD_H - menuHeight },
+    }
     local lib = xpilot.lib
     lcd.clear()
     if handle then
@@ -154,13 +159,12 @@ local function run(...)
         end
       end
     end
-    local menuHeight = 9
     for i,v in ipairs(app) do
       local menu = v.name == "menu"
       local main = i == scrn
       if v and v.run and (main or menu) then
-        if    (menu and v.run(xpilot, 0,          0, LCD_W,         menuHeight, ...))
-           or (main and v.run(xpilot, 0, menuHeight, LCD_W, LCD_H - menuHeight, ...)) then
+        if    (menu and v.run(xpilot, frame["menu"], ...))
+           or (main and v.run(xpilot, frame["main"], ...)) then
           lib.print("Failed to execute \""..v.name..".run()\"")
           app[i].run = lib.clearTable(v)
         end

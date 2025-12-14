@@ -202,7 +202,11 @@ local function exit(xpilot, ...)
   ctl = xpilot.lib.clearTable(ctl)
 end
 
-local function run(xpilot, x, y, w, h, ...)
+local function run(xpilot, frame, ...)
+  local x = frame.x
+  local y = frame.y
+  local w = frame.w
+  local h = frame.h
   local stride = xpilot.env.font.sml.h
   local pageSize = math.floor(h / stride)
   ctl.pageSize = pageSize

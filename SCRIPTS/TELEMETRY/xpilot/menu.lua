@@ -63,7 +63,11 @@ local function exit(xpilot, ...)
   tic = xpilot.lib.clearTable(tic)
 end
 
-local function run(xpilot, x, y, w, h, ...)
+local function run(xpilot, frame, ...)
+  local x = frame.x
+  local y = frame.y
+  local w = frame.w
+  local h = frame.h
   drawBackground(xpilot, x, y, w, h)
   local telem = xpilot.telem
   local left = x + 1

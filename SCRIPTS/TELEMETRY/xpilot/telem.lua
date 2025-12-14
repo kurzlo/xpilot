@@ -37,6 +37,44 @@ local flightModeStr = {
   [31] = "No Telemetry",
 }
 
+local flightModeCRSF = {
+  -- CRSF Flight Modes
+  ["STAB"] = 20,
+  ["STAB*"] = 20,
+  ["HOR"] = 21,
+  ["HOR*"] = 21,
+  ["AIR"] = 19,
+  ["AIR*"] = 19,
+  ["ACRO"] = 19,
+  ["ACRO*"] = 19,
+  ["RTH"] = 28,
+  ["RTH*"] = 28,
+}
+
+local flightModeBF = {
+  [1] = {
+    [1] = 22, --GPS Hold
+    [2] = 28, --GPS Home
+    --[3] = ??, --Headfree
+  },
+  --[[ [2] = {
+    [1] = ??, --Mag enabled
+    [2] = ??, --Baro enabled
+    [4] = ??, --Sonar enabled
+  } ]]
+  [3] = {
+    [0] = 19, --acro
+    [1] = 20, --angle
+    [2] = 21, --horizon
+    --[4] = --passthrough
+  },
+  --[[ [4] = {
+    [1] = ??, --ok to arm
+    [2] = ??, --arming is prevented
+    [4] = ??, --is armed
+  } ]]
+}
+
 --[[
 local navStateStr = {
   [ 0] = "Manual",
@@ -79,6 +117,7 @@ local battTable = {
   { ["v"] = 4.2, ["p"] = 100, ["d"] = nil, },
 }
 
+--FrSky
 local idxRxBt =  1;
 local idxRSSI =  2;
 local idxVSpd =  3;
@@ -99,6 +138,14 @@ local idxRoll = 17;
 local idxYaw  = 18;
 local idx5000 = 19;
 local idx5001 = 20;
+
+local idx5230 = 21; --pitch
+local idx5240 = 22; --roll
+
+--CRSF
+local idxFM = 23;
+local idxBat_ = 24;
+local idx1RSS = 25;
 
 local tic = nil
 local telemTab = nil
@@ -139,6 +186,11 @@ local function init(xpilot, ...)
     [idxYaw ] = "Yaw", --yaw
     --"5000", --Nav state (+128)
     --"5001", --GPS fix (same as TMP2)
+    [idx5230] = "5230", --pitch
+    [idx5240] = "5240", --roll
+    [idxFM  ] = "FM", --Betaflight Flightmode
+    [idxBat_] = "Bat_",
+    [idx1RSS] = "1RSS",
   }
   local getFieldInfo = lib.telem.getFieldInfo
   telemTab = {}
@@ -188,8 +240,20 @@ local function background(xpilot, ...)
 end
 
 local function flightMode(idx)
-  idx = idx or (telemTab[idxTmp1] and telemTab[idxTmp1].val)
-  return (idx and flightModeStr[idx] or "N/A"), idx
+  if telemTab[idxFM] and telemTab[idxFM].val then --CRSF
+    idx = idx or flightModeCRSF[telemTab[idxFM].val]
+  elseif telemTab[idxTmp1] then
+    local val = telemTab[idxTmp1].val
+    if val and (val >= 10000) then --betaflight
+      if flightModeBF[1] then
+        local val1 = math.floor(val / 1000) % 10
+        local val3 = math.floor(val /   10) % 10
+        val = (flightModeBF[1][val1] and flightModeBF[1][val1]) or (flightModeBF[3] and flightModeBF[3][val3])
+      end
+    end
+    idx = idx or val
+  end
+  return flightModeStr[idx] or "N/A", idx and idx or 0
 end
 
 --[[
@@ -241,7 +305,7 @@ local function battIRel(ITotal, capa, cmax)
 end
 
 local function battFuel()
-  return telemTab[idxFuel] and telemTab[idxFuel].val or 0
+  return telemTab[idxFuel] and telemTab[idxFuel].val or telemTab[idxBat_] and telemTab[idxBat_].val or 0
 end
 
 local function gpsState()
@@ -287,12 +351,32 @@ local function baroAlt() --meters
   return telemTab[idxAlt] and telemTab[idxAlt].val or 0
 end
 
-local function baroRoC() 
+local function baroRoC()
   return telemTab[idxVSpd] and telemTab[idxVSpd].val or 0
 end
 
+local function attPitch() --rad
+  return (telemTab[idxPtch] and telemTab[idxPtch].val) or (telemTab[idx5230] and telemTab[idx5230].val) or 0
+end
+
+local function attRoll() --rad
+  return (telemTab[idxRoll] and telemTab[idxRoll].val) or (telemTab[idx5240] and telemTab[idx5240].val) or 0
+end
+
+local function attYaw() --rad
+  return telemTab[idxYaw] and telemTab[idxYaw].val or 0
+end
+
 local function rssi()
-  return telemTab[idxRSSI] and telemTab[idxRSSI].val or 0
+  local val = 0
+  if telemTab[idxRSSI] then
+    val = telemTab[idxRSSI].val
+    val = val and val or 0
+  elseif telemTab[idx1RSS] then
+    val = telemTab[idx1RSS].val
+    val = val and (val <= 0) and (val >= -100) and (100 + val) or 0
+  end
+  return val
 end
 
 local function dist() --meters
@@ -322,6 +406,11 @@ local telem = {
   ["baro"] = {
     ["alt"] = baroAlt,
     ["RoC"] = baroRoC,
+  },
+  ["att"] = {
+    ["pitch"] = attPitch,
+    ["roll"] = attRoll,
+    ["yaw"] = attYaw,
   },
   ["rssi"] = rssi,
   ["dist"] = dist,

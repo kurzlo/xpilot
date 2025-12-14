@@ -114,7 +114,7 @@ for i,vi in pairs(telemTab) do
     for j,vj in pairs(vi.val) do
       str = str..j.."="..vj..", "
     end
-  else
+  elseif vi.val then
     str = str..vi.val
   end
   print(str)

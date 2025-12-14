@@ -30,8 +30,12 @@ local function drawValue(libLCD, xl, yl, xv, yv, xu, yu, lab, val, unit)
   drawText(libLCD, xu, yu, unit, SMLSIZE)
 end
 
-local function run(xpilot, x, y, w, h, ...)
+local function run(xpilot, frame, ...)
   local telem = xpilot.telem
+  local x = frame.x
+  local y = frame.y
+  local w = frame.w
+  local h = frame.h
   if telem then
     local cfg = xpilot.cfg
     local lib = xpilot.lib
