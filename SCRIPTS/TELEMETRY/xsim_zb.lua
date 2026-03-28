@@ -1,5 +1,6 @@
 require("otx")
 require("lcd")
+require("model")
 
 local evt = {
   ["shft"] = { ["prs"] =  96, ["rel"] = 32, ["lng"] = 128 },
@@ -17,6 +18,7 @@ local xsim = dofile("SCRIPTS/TELEMETRY/xsim.lua")
 
 lcd.init()
 xsim.init()
+model.init()
 
 local dt = .1
 local t = 0
@@ -49,5 +51,6 @@ while true do
   t = t + dt
 end
 
+model.exit()
 xsim.exit()
 lcd.exit()

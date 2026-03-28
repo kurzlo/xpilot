@@ -109,13 +109,24 @@ local gpsStateStr = {
   [4] = "DG", --differential GPS
 }
 
-local battTable = {
-  { ["v"] = 3.3, ["p"] =   0, ["d"] = nil, },
-  { ["v"] = 3.6, ["p"] =   5, ["d"] = nil, },
-  { ["v"] = 3.7, ["p"] =  15, ["d"] = nil, },
-  { ["v"] = 4.0, ["p"] =  85, ["d"] = nil, },
-  { ["v"] = 4.2, ["p"] = 100, ["d"] = nil, },
+local battTables = {
+  [1] = {
+    { ["v"] = 3.3, ["p"] =   0, ["d"] = nil, },
+    { ["v"] = 3.6, ["p"] =   5, ["d"] = nil, },
+    { ["v"] = 3.7, ["p"] =  15, ["d"] = nil, },
+    { ["v"] = 4.0, ["p"] =  85, ["d"] = nil, },
+    { ["v"] = 4.2, ["p"] = 100, ["d"] = nil, },
+  },
+  [2] = {
+    { ["v"] = 3.3,  ["p"] =   0, ["d"] = nil, },
+    { ["v"] = 3.6,  ["p"] =   5, ["d"] = nil, },
+    { ["v"] = 3.7,  ["p"] =  15, ["d"] = nil, },
+    { ["v"] = 4.1,  ["p"] =  85, ["d"] = nil, },
+    { ["v"] = 4.35, ["p"] = 100, ["d"] = nil, },
+  }
 }
+local battTableIndex = 1
+
 
 --FrSky
 local idxRxBt =  1;
@@ -154,6 +165,7 @@ local function init(xpilot, ...)
   local cfg = xpilot.cfg
   local getConfig = cfg and cfg.get
   local telemCfg = getConfig and getConfig("telem")
+  local battCfg = getConfig and getConfig("batt")
   local lib = xpilot.lib
   local ticInit = lib.tic.init
   local tics = {
@@ -205,13 +217,18 @@ local function init(xpilot, ...)
       }
     end
   end
-  collectgarbage()
-  collectgarbage()
-  for i = 2, #battTable do
-    local dv = battTable[i].v - battTable[i-1].v
-    local dp = battTable[i].p - battTable[i-1].p
-    battTable[i].d = dp / dv
+  for i = 1, #battTables do
+    local tab = battTables[i]
+    for j = 2, #tab do
+      local dv = tab[j].v - tab[j-1].v
+      local dp = tab[j].p - tab[j-1].p
+      battTables[i][j].d = dp / dv
+    end
   end
+  local hv = battCfg.hv
+  battTableIndex = hv and hv <= #battTables and hv or 1
+  collectgarbage()
+  collectgarbage()
 end
 
 function exit(xpilot, ...)
@@ -235,6 +252,9 @@ local function background(xpilot, ...)
   end
   local cfg = xpilot.cfg
   if cfg and update(tic.cfg, now) then
+    local battCfg = cfg.get("batt")
+    local hv = battCfg.hv
+    battTableIndex = hv and hv <= #battTables and hv or 1
     tic.upd = xtic.setRate(tic.upd, cfg.get("telem", "updRate"))
   end
 end
@@ -273,6 +293,7 @@ local function battVCell(VTotal, cells)
 end
 
 local function battVCellRel(VCell)
+  local battTable = battTables[battTableIndex]
   VCell = VCell or battVCell()
   if VCell >= battTable[#battTable].v then
     VCell = battTable[#battTable].p

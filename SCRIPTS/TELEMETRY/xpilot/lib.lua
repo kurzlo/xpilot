@@ -93,6 +93,11 @@ local libTelem = {
 }
 
 
+local libModel = {
+  ["getInfo"] = model.getInfo,
+}
+
+
 local function ticSetRate(t, rate_Hz)
   t.period = rate_Hz and rate_Hz > 0 and 100 / rate_Hz or 0
   return t
@@ -134,6 +139,7 @@ local lib = {
   ["math"] = libMath,
   ["lcd"] = libLCD,
   ["telem"] = libTelem,
+  ["model"] = libModel,
   ["tic"] = libTic,
   ["date"] = libDate,
 }

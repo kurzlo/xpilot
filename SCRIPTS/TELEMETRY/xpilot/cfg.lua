@@ -1,15 +1,22 @@
 
 local tab = {
   { ["hdr"] = "Battery" },
-  { ["itm"] =   "Cells",        ["grp"] = "batt", ["val"] = "cells", ["unit"] = nil,   ["num"] = { ["min"] =   1, ["max"] =    10, ["inc"] =   1 } },
-  { ["itm"] =   "Capacity",     ["grp"] = "batt", ["val"] = "capa",  ["unit"] = "mAh", ["num"] = { ["min"] = 500, ["max"] = 10000, ["inc"] = 100 } },
-  { ["itm"] =   "Avg C-Value",  ["grp"] = "batt", ["val"] = "cval",  ["unit"] = nil,   ["num"] = { ["min"] =  10, ["max"] =   500, ["inc"] =   5 } },
-  { ["itm"] =   "Max C-Value",  ["grp"] = "batt", ["val"] = "cmax",  ["unit"] = nil,   ["num"] = { ["min"] =  10, ["max"] =   500, ["inc"] =   5 } },
+  { ["itm"] =   "Cells",       ["grp"] = "batt", ["val"] = "cells", ["unit"] = nil,   ["num"] = { ["min"] =   1, ["max"] =     12, ["inc"] =   1 } },
+  { ["itm"] =   "Capacity",    ["grp"] = "batt", ["val"] = "capa",  ["unit"] = "mAh", ["num"] = { ["min"] = 100, ["max"] = 100000, ["inc"] = 100 } },
+  { ["itm"] =   "Avg C-Value", ["grp"] = "batt", ["val"] = "cval",  ["unit"] = nil,   ["num"] = { ["min"] =   1, ["max"] =    500, ["inc"] =   5 } },
+  { ["itm"] =   "Max C-Value", ["grp"] = "batt", ["val"] = "cmax",  ["unit"] = nil,   ["num"] = { ["min"] =   1, ["max"] =    500, ["inc"] =   5 } },
+  { ["itm"] =   "HV",          ["grp"] = "batt", ["val"] = "hv",    ["unit"] = nil,   ["combo"] = { [1] = "Disabled", [2] = "Enabled" } },
+  { ["hdr"] = "Notifications" },
+  { ["itm"] =   "Mute",        ["grp"] = "alert", ["val"] = "mute",  ["unit"] = nil, ["combo"] = { [1] = "Disabled", [2] = "Enabled" } },
+  { ["itm"] =   "Voltage",     ["grp"] = "alert", ["val"] = "batt",  ["unit"] = nil, ["combo"] = { [1] = "Disabled", [2] = "Enabled" } },
+  { ["itm"] =   "Current",     ["grp"] = "alert", ["val"] = "curr",  ["unit"] = nil, ["combo"] = { [1] = "Disabled", [2] = "Enabled" } },
+  { ["itm"] =   "Telemety",    ["grp"] = "alert", ["val"] = "telem", ["unit"] = nil, ["combo"] = { [1] = "Disabled", [2] = "Enabled" } },
+  { ["itm"] =   "Flight Mode", ["grp"] = "alert", ["val"] = "fm",    ["unit"] = nil, ["combo"] = { [1] = "Disabled", [2] = "Enabled" } },
+  { ["itm"] =   "GPS loss",    ["grp"] = "alert", ["val"] = "gps",   ["unit"] = nil, ["combo"] = { [1] = "Disabled", [2] = "Enabled" } },
   { ["hdr"] = "Telemetry" },
-  { ["itm"] =   "Update Rate",  ["grp"] = "telem", ["val"] = "updRate", ["unit"] = "Hz",  ["num"] = { ["min"] = 1, ["max"] = 10, ["inc"] = 1 } },
+  { ["itm"] =   "Update Rate",  ["grp"] = "telem", ["val"] = "updRate", ["unit"] = "Hz",  ["num"] = { ["min"] = 1, ["max"] = 20, ["inc"] = 1 } },
   { ["itm"] =   "Logging",      ["grp"] = "telem", ["val"] = "rec",     ["unit"] = nil,   ["combo"] = { [1] = "Disabled", [2] = "Enabled" } },
   { ["itm"] =   "Logging Rate", ["grp"] = "telem", ["val"] = "logRate", ["unit"] = "Hz",  ["num"] = { ["min"] = 1, ["max"] = 10, ["inc"] = 1 } },
-  { ["itm"] =   "Notify loss",  ["grp"] = "telem", ["val"] = "notify",  ["unit"] = nil,   ["combo"] = { [1] = "Disabled", [2] = "Enabled" } },
 }
 
 local config = {
@@ -18,12 +25,20 @@ local config = {
     ["capa" ] = 1800,
     ["cval" ] = 75,
     ["cmax" ] = 135,
+    ["hv"   ] = 1,
+  },
+  ["alert"] = {
+    ["mute" ] = 1,
+    ["batt" ] = 2,
+    ["curr" ] = 2,
+    ["telem"] = 2,
+    ["fm"   ] = 2,
+    ["gps"  ] = 2,
   },
   ["telem"] = {
     ["updRate"] = 1,
-    ["rec"] = 1,
+    ["rec"    ] = 1,
     ["logRate"] = 1,
-    ["notify"] = 1,
   },
 }
 
@@ -118,8 +133,10 @@ local function enterEvent(xpilot, ...)
   end
   if writeConfig then
     local xio = lib.io
+    local mod = lib.model
     local file = env.cfg.file
-    local fid = xio.open(env.dir.cfg..file..".cfg", "w")
+    local info = mod.getInfo()
+    local fid = xio.open(env.dir.cfg..file.."-"..info.name..".cfg", "w")
     if fid then
       for i,vi in pairs(config) do
         xio.write(fid, i.."={")
@@ -130,7 +147,7 @@ local function enterEvent(xpilot, ...)
       end
       xio.close(fid)
     else
-      lib.print("Failed to write configuration \""..file.."\"")
+      lib.print("Failed to write configuration \""..file.."-"..info.name.."\"")
     end
     collectgarbage()
     collectgarbage()
@@ -175,8 +192,10 @@ local function init(xpilot, ...)
     ["enter"] = false,
   }
   local xio = lib.io
+  local mod = lib.model
   local file = env.cfg.file
-  local fid = xio.open(env.dir.cfg..file..".cfg", "r")
+  local info = mod.getInfo()
+  local fid = xio.open(env.dir.cfg..file.."-"..info.name..".cfg", "r")
   if fid then
     local newCfg = readConfig(xpilot, fid)
     xio.close(fid)
@@ -194,7 +213,7 @@ local function init(xpilot, ...)
       end
     end
   else
-    lib.print("Failed to open configuration \""..file.."\"")
+    lib.print("Failed to open configuration \""..file.."-"..info.name.."\"")
   end
 end
 
